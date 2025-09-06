@@ -1,0 +1,606 @@
+package com.adchain.sdk.offerwall
+
+import android.annotation.SuppressLint
+import android.content.ActivityNotFoundException
+import android.content.Context
+import android.content.Intent
+import android.net.Uri
+import android.os.Bundle
+import android.util.Log
+import android.view.ViewGroup
+import android.webkit.*
+import android.widget.Toast
+import androidx.appcompat.app.AppCompatActivity
+import com.adchain.sdk.BuildConfig
+import com.adchain.sdk.core.AdchainSdk
+import com.adchain.sdk.network.NetworkManager
+import com.adchain.sdk.quiz.AdchainQuiz
+import com.adchain.sdk.utils.DeviceUtils
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.launch
+import org.json.JSONObject
+import java.lang.ref.WeakReference
+import java.util.Stack
+
+/**
+ * Internal activity for displaying the offerwall
+ * This activity is started by AdchainSdk.openOfferwall() method
+ */
+internal class AdchainOfferwallActivity : AppCompatActivity() {
+    
+    companion object {
+        private const val TAG = "AdchainOfferwall"
+        const val EXTRA_BASE_URL = "base_url"
+        const val EXTRA_USER_ID = "user_id"
+        const val EXTRA_APP_ID = "app_id"  // 하위 호환성을 위해 이름은 유지
+        const val EXTRA_IS_SUB_WEBVIEW = "is_sub_webview"
+        const val EXTRA_CONTEXT_TYPE = "context_type"
+        const val EXTRA_QUIZ_ID = "quiz_id"
+        const val EXTRA_QUIZ_TITLE = "quiz_title"
+        
+        private var callback: OfferwallCallback? = null
+        private val webViewStack = Stack<WeakReference<AdchainOfferwallActivity>>()
+        
+        fun setCallback(cb: OfferwallCallback?) {
+            callback = cb
+        }
+        
+        internal fun openSubWebView(context: Context, url: String) {
+            val intent = Intent(context, AdchainOfferwallActivity::class.java).apply {
+                putExtra(EXTRA_BASE_URL, url)
+                putExtra(EXTRA_IS_SUB_WEBVIEW, true)
+                putExtra(EXTRA_USER_ID, AdchainSdk.getCurrentUser()?.userId)
+                putExtra(EXTRA_APP_ID, AdchainSdk.getConfig()?.appId)
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            }
+            context.startActivity(intent)
+        }
+        
+        internal fun closeAllWebViews() {
+            // Close all stacked WebViews
+            while (webViewStack.isNotEmpty()) {
+                val activityRef = webViewStack.pop()
+                activityRef.get()?.finish()
+            }
+        }
+    }
+    
+    private lateinit var webView: WebView
+    private val coroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
+    private var isSubWebView = false
+    private var contextType: String = "offerwall"
+    
+    @SuppressLint("SetJavaScriptEnabled")
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        
+        // Check if this is a sub WebView
+        isSubWebView = intent.getBooleanExtra(EXTRA_IS_SUB_WEBVIEW, false)
+        
+        // Get context type (offerwall or quiz)
+        contextType = intent.getStringExtra(EXTRA_CONTEXT_TYPE) ?: "offerwall"
+        
+        // Setup action bar title based on context
+        if (contextType == "quiz") {
+            supportActionBar?.apply {
+                title = intent.getStringExtra(EXTRA_QUIZ_TITLE) ?: "Quiz"
+                setDisplayHomeAsUpEnabled(true)
+            }
+        }
+        
+        // Add to stack if this is a sub WebView
+        if (isSubWebView) {
+            webViewStack.push(WeakReference(this))
+        }
+        
+        // Create WebView
+        webView = WebView(this).apply {
+            layoutParams = ViewGroup.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.MATCH_PARENT
+            )
+        }
+        setContentView(webView)
+        
+        // Get base URL from intent
+        val baseUrl = intent.getStringExtra(EXTRA_BASE_URL)
+        if (baseUrl.isNullOrEmpty()) {
+            Log.e(TAG, "No base URL provided")
+            if (!isSubWebView) {
+                callback?.onError("Failed to load offerwall: No URL provided")
+            }
+            finish()
+            return
+        }
+        
+        // Setup WebView
+        setupWebView()
+        
+        // Build and load URL
+        val finalUrl = if (isSubWebView) {
+            // Sub WebView - use URL as is
+            baseUrl
+        } else {
+            // Main WebView - build with parameters
+            buildOfferwallUrl(baseUrl)
+        }
+        Log.d(TAG, "Loading ${if (isSubWebView) "sub " else ""}offerwall URL: $finalUrl")
+        webView.loadUrl(finalUrl)
+    }
+    
+    @SuppressLint("SetJavaScriptEnabled")
+    private fun setupWebView() {
+        webView.settings.apply {
+            javaScriptEnabled = true
+            domStorageEnabled = true
+            loadWithOverviewMode = true
+            useWideViewPort = true
+            builtInZoomControls = false
+            displayZoomControls = false
+            
+            // Allow mixed content including HTTP resources on HTTPS pages
+            // MIXED_CONTENT_ALWAYS_ALLOW allows all mixed content (including HTTP on HTTPS)
+            mixedContentMode = WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
+            
+            // Cache settings
+            cacheMode = WebSettings.LOAD_DEFAULT
+            
+            // User agent
+            userAgentString = "$userAgentString AdchainSDK/${BuildConfig.VERSION_NAME}"
+            
+            // Allow file access for local resources if needed
+            allowFileAccess = true
+            allowContentAccess = true
+        }
+        
+        // Set WebView client first (before loading URL)
+        setupWebViewClient()
+        
+        // WebChrome client for JavaScript dialogs
+        webView.webChromeClient = object : WebChromeClient() {
+            override fun onJsAlert(
+                view: WebView?,
+                url: String?,
+                message: String?,
+                result: JsResult?
+            ): Boolean {
+                Log.d(TAG, "JS Alert: $message")
+                return super.onJsAlert(view, url, message, result)
+            }
+        }
+        
+        // Add JavaScript interface for communication
+        // Register with a different name to avoid conflicts
+        webView.addJavascriptInterface(NativeBridge(), "__adchainNative__")
+    }
+    
+    private fun buildOfferwallUrl(baseUrl: String): String {
+        val urlBuilder = Uri.parse(baseUrl).buildUpon()
+        
+        // Add required parameters
+        urlBuilder.apply {
+            // User and app info  
+            appendQueryParameter("user_id", intent.getStringExtra(EXTRA_USER_ID) ?: "")
+            appendQueryParameter("app_key", intent.getStringExtra(EXTRA_APP_ID) ?: "")  // app_key로 변경
+            
+            // Add quiz-specific parameters if context is quiz
+            if (contextType == "quiz") {
+                intent.getStringExtra(EXTRA_QUIZ_ID)?.let {
+                    appendQueryParameter("quiz_id", it)
+                }
+                intent.getStringExtra(EXTRA_QUIZ_TITLE)?.let {
+                    appendQueryParameter("quiz_title", it)
+                }
+                appendQueryParameter("context", "quiz")
+            }
+            
+            // Device info
+            appendQueryParameter("device_id", DeviceUtils.getDeviceId(this@AdchainOfferwallActivity))
+            appendQueryParameter("os", "Android")
+            appendQueryParameter("os_version", DeviceUtils.getOsVersion())
+            appendQueryParameter("device_model", DeviceUtils.getDeviceModel())
+            appendQueryParameter("device_manufacturer", DeviceUtils.getDeviceManufacturer())
+            
+            // SDK info
+            appendQueryParameter("sdk_version", BuildConfig.VERSION_NAME)
+            appendQueryParameter("sdk_platform", "Android")
+            
+            // Session info
+            appendQueryParameter("session_id", NetworkManager.getSessionId())
+            appendQueryParameter("timestamp", System.currentTimeMillis().toString())
+            
+            // Add advertising ID if available (synchronously from cache)
+            val advertisingId = DeviceUtils.getAdvertisingIdSync(this@AdchainOfferwallActivity)
+            if (!advertisingId.isNullOrEmpty()) {
+                appendQueryParameter("advertising_id", advertisingId)
+            }
+        }
+        
+        // Also inject advertising ID via JavaScript for backward compatibility
+        coroutineScope.launch {
+            try {
+                // Try to fetch fresh advertising ID asynchronously
+                val freshAdvertisingId = DeviceUtils.getAdvertisingId(this@AdchainOfferwallActivity)
+                if (!freshAdvertisingId.isNullOrEmpty()) {
+                    webView.evaluateJavascript(
+                        "if(window.AdchainConfig) { window.AdchainConfig.advertisingId = '$freshAdvertisingId'; }",
+                        null
+                    )
+                }
+            } catch (e: Exception) {
+                Log.w(TAG, "Failed to inject advertising ID via JavaScript", e)
+            }
+        }
+        
+        return urlBuilder.build().toString()
+    }
+    
+    private fun closeOfferwall() {
+        Log.d(TAG, "Closing offerwall")
+        
+        // If this is a sub WebView, just close this one
+        if (isSubWebView) {
+            finish()
+            return
+        }
+        
+        // Close all WebViews and notify callback
+        closeAllWebViews()
+        callback?.onClosed()
+        
+        // Track close event
+        coroutineScope.launch {
+            val userId = intent.getStringExtra(EXTRA_USER_ID) ?: ""
+            NetworkManager.trackEvent(
+                userId = userId,
+                eventName = "offerwall_closed",
+                category = "offerwall"
+            )
+        }
+        
+        finish()
+    }
+    
+    override fun onBackPressed() {
+        if (webView.canGoBack()) {
+            webView.goBack()
+        } else {
+            // If this is a sub WebView, just close it
+            if (isSubWebView) {
+                finish()
+            } else {
+                // Main WebView - close everything
+                closeOfferwall()
+            }
+            super.onBackPressed()
+        }
+    }
+    
+    override fun onDestroy() {
+        super.onDestroy()
+        
+        // Remove WebView from parent before destroying to avoid "WebView.destroy() called while still attached" warning
+        (webView.parent as? ViewGroup)?.removeView(webView)
+        webView.destroy()
+        
+        // Remove from stack if it's a sub WebView
+        if (isSubWebView) {
+            webViewStack.removeIf { it.get() == this }
+        }
+        
+        // Clear callback to avoid memory leak (only for main WebView)
+        if (!isSubWebView) {
+            callback = null
+        }
+    }
+    
+    /**
+     * Simple native bridge interface
+     * Actual implementation that receives messages from JavaScript wrapper
+     */
+    inner class NativeBridge {
+        @JavascriptInterface
+        fun postMessage(jsonMessage: String) {
+            Log.d(TAG, "Received webkit message: $jsonMessage")
+            handlePostMessage(jsonMessage)
+        }
+    }
+    
+    /**
+     * Setup WebView client with proper handlers
+     */
+    private fun setupWebViewClient() {
+        webView.webViewClient = object : WebViewClient() {
+            override fun onPageFinished(view: WebView?, url: String?) {
+                super.onPageFinished(view, url)
+                Log.d(TAG, "Page loaded: $url, injecting webkit wrapper")
+                injectWebkitWrapper()
+            }
+            
+            override fun shouldOverrideUrlLoading(view: WebView?, request: WebResourceRequest?): Boolean {
+                val url = request?.url?.toString() ?: return false
+                
+                // Check for special URLs (e.g., close command)
+                if (url.contains("adchain://close")) {
+                    runOnUiThread {
+                        closeOfferwall()
+                    }
+                    return true
+                }
+                
+                // Load URL in WebView
+                return false
+            }
+            
+            override fun onReceivedError(
+                view: WebView?,
+                request: WebResourceRequest?,
+                error: WebResourceError?
+            ) {
+                super.onReceivedError(view, request, error)
+                // error.description requires API 23+, so we need to check the API level
+                val errorDescription = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.M) {
+                    error?.description?.toString() ?: "Unknown error"
+                } else {
+                    "WebView error occurred"
+                }
+                Log.e(TAG, "WebView error: $errorDescription")
+                runOnUiThread {
+                    callback?.onError("Failed to load offerwall: $errorDescription")
+                }
+            }
+        }
+    }
+    
+    /**
+     * Inject JavaScript wrapper to create iOS-compatible webkit.messageHandlers structure
+     */
+    private fun injectWebkitWrapper() {
+        val jsWrapper = """
+            (function() {
+                // Create webkit structure if it doesn't exist
+                if (typeof window.webkit === 'undefined') {
+                    window.webkit = {};
+                }
+                
+                // Create messageHandlers with postMessage function
+                window.webkit.messageHandlers = {
+                    postMessage: function(message) {
+                        // Forward to actual native bridge
+                        if (window.__adchainNative__ && window.__adchainNative__.postMessage) {
+                            // Convert object to JSON string if needed
+                            var jsonString = typeof message === 'string' ? message : JSON.stringify(message);
+                            window.__adchainNative__.postMessage(jsonString);
+                        } else {
+                            console.error('Native bridge not available');
+                        }
+                    }
+                };
+                
+                console.log('Webkit messageHandlers wrapper injected successfully');
+            })();
+        """.trimIndent()
+        
+        webView.evaluateJavascript(jsWrapper, null)
+    }
+    
+    
+    /**
+     * Common handler for postMessage calls from both interfaces
+     */
+    private fun handlePostMessage(jsonMessage: String) {
+        try {
+            val message = JSONObject(jsonMessage)
+            val type = message.getString("type")
+            val data = message.optJSONObject("data")
+            
+            Log.d(TAG, "Processing message type: $type")
+            
+            when (type) {
+                "openWebView" -> handleOpenWebView(data)
+                "close" -> handleClose()
+                "closeOpenWebView" -> handleCloseOpenWebView(data)
+                "externalOpenBrowser" -> handleExternalOpenBrowser(data)
+                // Quiz-specific message types
+                "quizCompleted" -> if (contextType == "quiz") handleQuizCompleted(data)
+                "quizStarted" -> if (contextType == "quiz") handleQuizStarted(data)
+                "getUserInfo" -> handleGetUserInfo()
+                else -> Log.w(TAG, "Unknown message type: $type")
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to parse JS message", e)
+        }
+    }
+    
+    // Message handlers for JavaScript bridge
+    private fun handleOpenWebView(data: JSONObject?) {
+        val url = data?.optString("url")
+        if (url.isNullOrEmpty()) {
+            Log.e(TAG, "openWebView: No URL provided")
+            return
+        }
+        
+        Log.d(TAG, "Opening sub WebView: $url")
+        
+        // Ensure UI operations run on UI thread
+        runOnUiThread {
+            openSubWebView(this, url)
+        }
+        
+        // Track event
+        coroutineScope.launch {
+            val userId = intent.getStringExtra(EXTRA_USER_ID) ?: ""
+            NetworkManager.trackEvent(
+                userId = userId,
+                eventName = "sub_webview_opened",
+                category = "offerwall",
+                properties = mapOf("url" to url)
+            )
+        }
+    }
+    
+    private fun handleClose() {
+        Log.d(TAG, "Handling close message")
+        
+        runOnUiThread {
+            // Close all WebViews
+            closeAllWebViews()
+            
+            // Close main offerwall
+            if (!isSubWebView) {
+                callback?.onClosed()
+                
+                // Track event
+                coroutineScope.launch {
+                    val userId = intent.getStringExtra(EXTRA_USER_ID) ?: ""
+                    NetworkManager.trackEvent(
+                        userId = userId,
+                        eventName = "offerwall_closed_by_js",
+                        category = "offerwall"
+                    )
+                }
+            }
+            
+            finish()
+        }
+    }
+    
+    private fun handleCloseOpenWebView(data: JSONObject?) {
+        val url = data?.optString("url")
+        Log.d(TAG, "Handling closeOpenWebView message - isSubWebView: $isSubWebView, url: $url")
+        
+        if (url.isNullOrEmpty()) {
+            Log.e(TAG, "closeOpenWebView: No URL provided")
+            return
+        }
+        
+        runOnUiThread {
+            // Create intent for new WebView with proper flags
+            val intent = Intent(this@AdchainOfferwallActivity, AdchainOfferwallActivity::class.java).apply {
+                putExtra(EXTRA_BASE_URL, url)
+                putExtra(EXTRA_IS_SUB_WEBVIEW, true)
+                putExtra(EXTRA_USER_ID, AdchainSdk.getCurrentUser()?.userId)
+                putExtra(EXTRA_APP_ID, AdchainSdk.getConfig()?.appId)
+                // Clear current activity and create new one
+                flags = Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_NEW_TASK
+            }
+            
+            // Start new activity
+            startActivity(intent)
+            
+            // Close current activity with fade animation
+            finish()
+            overridePendingTransition(android.R.anim.fade_in, android.R.anim.fade_out)
+            
+            // Track event
+            coroutineScope.launch {
+                val userId = intent.getStringExtra(EXTRA_USER_ID) ?: ""
+                NetworkManager.trackEvent(
+                    userId = userId,
+                    eventName = "webview_replaced",
+                    category = "offerwall",
+                    properties = mapOf("url" to url)
+                )
+            }
+        }
+    }
+    
+    private fun handleExternalOpenBrowser(data: JSONObject?) {
+        val url = data?.optString("url")
+        if (url.isNullOrEmpty()) {
+            Log.e(TAG, "externalOpenBrowser: No URL provided")
+            return
+        }
+        
+        Log.d(TAG, "Opening external browser: $url")
+        
+        runOnUiThread {
+            try {
+                val browserIntent = Intent(Intent.ACTION_VIEW, Uri.parse(url))
+                startActivity(browserIntent)
+                
+                // Track event
+                coroutineScope.launch {
+                    val userId = intent.getStringExtra(EXTRA_USER_ID) ?: ""
+                    NetworkManager.trackEvent(
+                        userId = userId,
+                        eventName = "external_browser_opened",
+                        category = "offerwall",
+                        properties = mapOf("url" to url)
+                    )
+                }
+            } catch (e: ActivityNotFoundException) {
+                Log.e(TAG, "No browser found to open URL: $url", e)
+                Toast.makeText(this@AdchainOfferwallActivity, "No browser app found", Toast.LENGTH_SHORT).show()
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to open external browser", e)
+                Toast.makeText(this@AdchainOfferwallActivity, "Failed to open browser", Toast.LENGTH_SHORT).show()
+            }
+        }
+    }
+    
+    // Quiz-specific message handlers
+    private fun handleQuizCompleted(data: JSONObject?) {
+        Log.d(TAG, "Quiz completed")
+        
+        runOnUiThread {
+            // Track quiz completion
+            coroutineScope.launch {
+                val userId = intent.getStringExtra(EXTRA_USER_ID) ?: ""
+                val quizId = intent.getStringExtra(EXTRA_QUIZ_ID) ?: ""
+                
+                NetworkManager.trackEvent(
+                    userId = userId,
+                    eventName = "quiz_completed",
+                    category = "quiz",
+                    properties = mapOf(
+                        "quiz_id" to quizId
+                    )
+                )
+            }
+            
+            // Trigger quiz list refresh in SDK
+            AdchainQuiz.currentQuizInstance?.get()?.refreshAfterCompletion()
+            
+            // Notify callback with quiz result
+            callback?.onClosed()
+            // Don't finish() - let WebView stay open for user to continue or close manually
+        }
+    }
+    
+    private fun handleQuizStarted(data: JSONObject?) {
+        Log.d(TAG, "Quiz started")
+        
+        coroutineScope.launch {
+            val userId = intent.getStringExtra(EXTRA_USER_ID) ?: ""
+            val quizId = intent.getStringExtra(EXTRA_QUIZ_ID) ?: ""
+            
+            NetworkManager.trackEvent(
+                userId = userId,
+                eventName = "quiz_started",
+                category = "quiz",
+                properties = mapOf("quiz_id" to quizId)
+            )
+        }
+    }
+    
+    private fun handleGetUserInfo() {
+        AdchainSdk.getCurrentUser()?.let { user ->
+            val userInfo = JSONObject().apply {
+                put("userId", user.userId)
+                put("gender", user.gender?.value ?: "")
+                put("birthYear", user.birthYear ?: 0)
+            }
+            
+            val script = """
+                if (window.onUserInfoReceived) {
+                    window.onUserInfoReceived($userInfo);
+                }
+            """.trimIndent()
+            
+            webView.evaluateJavascript(script, null)
+        }
+    }
+}

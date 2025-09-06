@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+    
+    <!-- Google Advertising ID permission -->
+    <uses-permission android:name="com.google.android.gms.permission.AD_ID" />
+    
+    <application>
+        <activity
+            android:name=".hub.AdchainHubActivity"
+            android:configChanges="orientation|screenSize|keyboardHidden"
+            android:theme="@style/Theme.AppCompat.Light.DarkActionBar" />
+        
+        <!-- Offerwall Activity -->
+        <activity
+            android:name=".offerwall.AdchainOfferwallActivity"
+            android:configChanges="orientation|screenSize|keyboardHidden"
+            android:theme="@style/Theme.AppCompat.Light.NoActionBar"
+            android:hardwareAccelerated="true" />
+        
+        
+    </application>
+    
+</manifest>
