@@ -16,7 +16,7 @@ if (localPropertiesFile.exists()) {
 publishing {
     publications {
         register<MavenPublication>("release") {
-            groupId = "com.adchain"
+            groupId = "com.adchain.sdk"
             artifactId = "adchain-sdk"
             version = project.findProperty("SDK_VERSION") as String? ?: "1.0.0"
 
@@ -27,7 +27,7 @@ publishing {
             pom {
                 name.set("Adchain SDK")
                 description.set("Android SDK for Adchain advertising platform")
-                url.set("https://github.com/yourusername/adchain-sdk-android")
+                url.set("https://github.com/1selfworld-labs/adchain-sdk-android")
                 
                 licenses {
                     license {
@@ -45,9 +45,9 @@ publishing {
                 }
                 
                 scm {
-                    connection.set("scm:git:github.com/yourusername/adchain-sdk-android.git")
-                    developerConnection.set("scm:git:ssh://github.com/yourusername/adchain-sdk-android.git")
-                    url.set("https://github.com/yourusername/adchain-sdk-android/tree/main")
+                    connection.set("scm:git:github.com/1selfworld-labs/adchain-sdk-android.git")
+                    developerConnection.set("scm:git:ssh://github.com/1selfworld-labs/adchain-sdk-android.git")
+                    url.set("https://github.com/1selfworld-labs/adchain-sdk-android/tree/main")
                 }
             }
         }
@@ -69,7 +69,7 @@ publishing {
         // Alternative: GitHub Packages
         maven {
             name = "GitHubPackages"
-            url = uri("https://maven.pkg.github.com/yourusername/adchain-sdk-android")
+            url = uri("https://maven.pkg.github.com/1selfworld-labs/adchain-sdk-android")
             credentials {
                 username = localProperties.getProperty("gpr.user") ?: System.getenv("GITHUB_ACTOR")
                 password = localProperties.getProperty("gpr.key") ?: System.getenv("GITHUB_TOKEN")

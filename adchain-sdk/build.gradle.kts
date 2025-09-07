@@ -98,13 +98,14 @@ dependencies {
     androidTestImplementation("androidx.test.espresso:espresso-core:3.5.1")
 }
 
-// Publishing configuration for JitPack
+// Publishing configuration
 afterEvaluate {
     publishing {
         publications {
             register<MavenPublication>("release") {
-                groupId = "com.github.1selfworld-labs"
-                artifactId = "adchain-sdk-android"
+                // Maven Central requires domain-based groupId
+                groupId = "io.github.1selfworld-labs"
+                artifactId = "adchain-sdk"
                 version = project.findProperty("SDK_VERSION") as String? ?: "1.0.0"
 
                 from(components["release"])
@@ -141,14 +142,43 @@ afterEvaluate {
 }
     
     repositories {
-        // GitHub Packages
+        // Maven Central (Sonatype)
         maven {
-            name = "GitHubPackages"
-            url = uri("https://maven.pkg.github.com/1selfworld-labs/adchain-sdk-android")
+            name = "sonatype"
+            val releasesRepoUrl = "https://s01.oss.sonatype.org/service/local/staging/deploy/maven2/"
+            val snapshotsRepoUrl = "https://s01.oss.sonatype.org/content/repositories/snapshots/"
+            url = uri(if (version.toString().endsWith("SNAPSHOT")) snapshotsRepoUrl else releasesRepoUrl)
+            
             credentials {
-                username = System.getenv("GITHUB_ACTOR")
-                password = System.getenv("GITHUB_TOKEN")
+                val localPropertiesFile = rootProject.file("local.properties")
+                if (localPropertiesFile.exists()) {
+                    val localProperties = java.util.Properties()
+                    localProperties.load(localPropertiesFile.inputStream())
+                    username = localProperties.getProperty("ossrhUsername") ?: System.getenv("OSSRH_USERNAME")
+                    password = localProperties.getProperty("ossrhPassword") ?: System.getenv("OSSRH_PASSWORD")
+                } else {
+                    username = System.getenv("OSSRH_USERNAME")
+                    password = System.getenv("OSSRH_PASSWORD")
+                }
             }
+        }
+    }
+}
+
+// Signing configuration for Maven Central
+signing {
+    val localPropertiesFile = rootProject.file("local.properties")
+    if (localPropertiesFile.exists()) {
+        val localProperties = java.util.Properties()
+        localProperties.load(localPropertiesFile.inputStream())
+        
+        val signingKeyId = localProperties.getProperty("signing.keyId")
+        val signingPassword = localProperties.getProperty("signing.password")
+        val signingKeyFile = localProperties.getProperty("signing.secretKeyRingFile")
+        
+        if (signingKeyId != null && signingPassword != null && signingKeyFile != null) {
+            useInMemoryPgpKeys(signingKeyId, File(signingKeyFile).readText(), signingPassword)
+            sign(publishing.publications["release"])
         }
     }
 }

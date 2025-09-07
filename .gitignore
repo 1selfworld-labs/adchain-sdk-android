@@ -111,4 +111,7 @@ ehthumbs.db
 Thumbs.db
 
 # Claude project files
-.claude/
+.claude/# Maven Central secrets
+local.properties
+*.asc
+*.gpg
