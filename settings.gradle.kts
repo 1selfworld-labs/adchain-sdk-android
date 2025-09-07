@@ -16,5 +16,12 @@ dependencyResolutionManagement {
     repositories {
         google()
         mavenCentral()
+        maven {
+            url = uri("https://jitpack.io")
+            credentials {
+                username = providers.gradleProperty("authToken").orNull
+                    ?: System.getenv("JITPACK_AUTH_TOKEN")
+            }
+        }
     }
 }
