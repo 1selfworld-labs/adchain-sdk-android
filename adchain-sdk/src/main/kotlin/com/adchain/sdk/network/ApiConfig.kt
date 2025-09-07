@@ -3,7 +3,7 @@ package com.adchain.sdk.network
 import com.adchain.sdk.BuildConfig
 
 object ApiConfig {
-    const val SDK_VERSION = "1.0.2"
+    const val SDK_VERSION = "1.0.3"
     const val PLATFORM = "android"
     
     enum class Environment(val baseUrl: String) {

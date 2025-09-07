@@ -110,36 +110,33 @@ afterEvaluate {
 
                 from(components["release"])
 
-            pom {
-                name.set("Adchain SDK")
-                description.set("Android SDK for Adchain advertising platform")
-                url.set("https://github.com/1selfworld-labs/adchain-sdk-android")
-                
-                licenses {
-                    license {
-                        name.set("The Apache License, Version 2.0")
-                        url.set("http://www.apache.org/licenses/LICENSE-2.0.txt")
+                pom {
+                    name.set("Adchain SDK")
+                    description.set("Android SDK for Adchain advertising platform")
+                    url.set("https://github.com/1selfworld-labs/adchain-sdk-android")
+                    
+                    licenses {
+                        license {
+                            name.set("The Apache License, Version 2.0")
+                            url.set("http://www.apache.org/licenses/LICENSE-2.0.txt")
+                        }
+                    }
+                    
+                    developers {
+                        developer {
+                            id.set("adchain")
+                            name.set("Adchain Team")
+                            email.set("dev@adchain.com")
+                        }
+                    }
+                    
+                    scm {
+                        connection.set("scm:git:github.com/1selfworld-labs/adchain-sdk-android.git")
+                        developerConnection.set("scm:git:ssh://github.com/1selfworld-labs/adchain-sdk-android.git")
+                        url.set("https://github.com/1selfworld-labs/adchain-sdk-android/tree/main")
                     }
                 }
-                
-                developers {
-                    developer {
-                        id.set("adchain")
-                        name.set("Adchain Team")
-                        email.set("dev@adchain.com")
-                    }
-                }
-                
-                scm {
-                    connection.set("scm:git:github.com/1selfworld-labs/adchain-sdk-android.git")
-                    developerConnection.set("scm:git:ssh://github.com/1selfworld-labs/adchain-sdk-android.git")
-                    url.set("https://github.com/1selfworld-labs/adchain-sdk-android/tree/main")
-                }
-            }
-        }
             }
         }
     }
-    
-    // repositories block removed for JitPack
 }
