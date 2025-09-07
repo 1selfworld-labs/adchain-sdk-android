@@ -137,48 +137,9 @@ afterEvaluate {
                 }
             }
         }
-    }
-    }
-}
-    
-    repositories {
-        // Maven Central (Sonatype)
-        maven {
-            name = "sonatype"
-            val releasesRepoUrl = "https://s01.oss.sonatype.org/service/local/staging/deploy/maven2/"
-            val snapshotsRepoUrl = "https://s01.oss.sonatype.org/content/repositories/snapshots/"
-            url = uri(if (version.toString().endsWith("SNAPSHOT")) snapshotsRepoUrl else releasesRepoUrl)
-            
-            credentials {
-                val localPropertiesFile = rootProject.file("local.properties")
-                if (localPropertiesFile.exists()) {
-                    val localProperties = java.util.Properties()
-                    localProperties.load(localPropertiesFile.inputStream())
-                    username = localProperties.getProperty("ossrhUsername") ?: System.getenv("OSSRH_USERNAME")
-                    password = localProperties.getProperty("ossrhPassword") ?: System.getenv("OSSRH_PASSWORD")
-                } else {
-                    username = System.getenv("OSSRH_USERNAME")
-                    password = System.getenv("OSSRH_PASSWORD")
-                }
             }
         }
     }
-}
-
-// Signing configuration for Maven Central
-signing {
-    val localPropertiesFile = rootProject.file("local.properties")
-    if (localPropertiesFile.exists()) {
-        val localProperties = java.util.Properties()
-        localProperties.load(localPropertiesFile.inputStream())
-        
-        val signingKeyId = localProperties.getProperty("signing.keyId")
-        val signingPassword = localProperties.getProperty("signing.password")
-        val signingKeyFile = localProperties.getProperty("signing.secretKeyRingFile")
-        
-        if (signingKeyId != null && signingPassword != null && signingKeyFile != null) {
-            useInMemoryPgpKeys(signingKeyId, File(signingKeyFile).readText(), signingPassword)
-            sign(publishing.publications["release"])
-        }
-    }
+    
+    // repositories block removed for JitPack
 }
