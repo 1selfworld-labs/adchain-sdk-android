@@ -103,9 +103,9 @@ afterEvaluate {
     publishing {
         publications {
             register<MavenPublication>("release") {
-                // Maven Central requires domain-based groupId
-                groupId = "io.github.1selfworld-labs"
-                artifactId = "adchain-sdk"
+                // JitPack uses GitHub-based groupId
+                groupId = "com.github.1selfworld-labs"
+                artifactId = "adchain-sdk-android"
                 version = project.findProperty("SDK_VERSION") as String? ?: "1.0.0"
 
                 from(components["release"])
