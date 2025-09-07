@@ -2,6 +2,7 @@ plugins {
     id("com.android.library")
     id("org.jetbrains.kotlin.android")
     id("maven-publish")
+    id("signing")
 }
 
 android {
@@ -97,15 +98,56 @@ dependencies {
     androidTestImplementation("androidx.test.espresso:espresso-core:3.5.1")
 }
 
-publishing {
-    publications {
-        register<MavenPublication>("release") {
-            groupId = "com.adchain.sdk"
-            artifactId = "adchain-sdk"
-            version = "1.0.0"
+// Publishing configuration for JitPack
+afterEvaluate {
+    publishing {
+        publications {
+            register<MavenPublication>("release") {
+                groupId = "com.github.1selfworld-labs"
+                artifactId = "adchain-sdk-android"
+                version = project.findProperty("SDK_VERSION") as String? ?: "1.0.0"
 
-            afterEvaluate {
                 from(components["release"])
+
+            pom {
+                name.set("Adchain SDK")
+                description.set("Android SDK for Adchain advertising platform")
+                url.set("https://github.com/1selfworld-labs/adchain-sdk-android")
+                
+                licenses {
+                    license {
+                        name.set("The Apache License, Version 2.0")
+                        url.set("http://www.apache.org/licenses/LICENSE-2.0.txt")
+                    }
+                }
+                
+                developers {
+                    developer {
+                        id.set("adchain")
+                        name.set("Adchain Team")
+                        email.set("dev@adchain.com")
+                    }
+                }
+                
+                scm {
+                    connection.set("scm:git:github.com/1selfworld-labs/adchain-sdk-android.git")
+                    developerConnection.set("scm:git:ssh://github.com/1selfworld-labs/adchain-sdk-android.git")
+                    url.set("https://github.com/1selfworld-labs/adchain-sdk-android/tree/main")
+                }
+            }
+        }
+    }
+    }
+}
+    
+    repositories {
+        // GitHub Packages
+        maven {
+            name = "GitHubPackages"
+            url = uri("https://maven.pkg.github.com/1selfworld-labs/adchain-sdk-android")
+            credentials {
+                username = System.getenv("GITHUB_ACTOR")
+                password = System.getenv("GITHUB_TOKEN")
             }
         }
     }

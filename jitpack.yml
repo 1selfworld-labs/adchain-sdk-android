@@ -1,0 +1,16 @@
+# JitPack configuration
+jdk:
+  - openjdk17
+
+# Build command
+install:
+  - echo "Building AdChain SDK..."
+  - ./gradlew clean
+  - ./gradlew :adchain-sdk:assembleRelease
+  - ./gradlew :adchain-sdk:publishToMavenLocal
+  - echo "Build completed successfully!"
+
+# Optional: specify the library module
+# This tells JitPack which module to publish
+before_install:
+  - chmod +x ./gradlew
