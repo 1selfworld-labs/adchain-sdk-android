@@ -16,14 +16,18 @@ data class Mission(
     val title: String,
     @Json(name = "description")
     val description: String,
+    @Json(name = "imageUrl")  // snake_case에서 camelCase로 변경
+    val imageUrl: String,
+    @Json(name = "landingUrl")  // snake_case에서 camelCase로 변경
+    val landingUrl: String,
     @Json(name = "point")
     val point: String,
-    @Json(name = "image_url")
-    val imageUrl: String,
-    @Json(name = "landing_url")
-    val landingUrl: String,
-    @Json(name = "metadata")
-    val metadata: Map<String, Any>? = null,
+    @Json(name = "status")
+    val status: String? = null,  // iOS와 동일하게 추가
+    @Json(name = "progress")
+    val progress: Int? = null,  // iOS와 동일하게 추가
+    @Json(name = "total")
+    val total: Int? = null,  // iOS와 동일하게 추가
     @Json(name = "type")
     val type: MissionType? = MissionType.NORMAL
 )

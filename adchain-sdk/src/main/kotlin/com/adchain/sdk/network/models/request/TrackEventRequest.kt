@@ -8,27 +8,30 @@ data class TrackEventRequest(
     @Json(name = "name")
     val name: String,  // Event name like 'ad_impression', 'ad_click', etc.
     
-    @Json(name = "timestamp")
-    val timestamp: Long = System.currentTimeMillis(),  // Unix timestamp in milliseconds
+    @Json(name = "sdkVersion")
+    val sdkVersion: String,  // SDK version
     
-    @Json(name = "session_id")
+    @Json(name = "timestamp")
+    val timestamp: String = System.currentTimeMillis().toString(),  // Unix timestamp in milliseconds as string
+    
+    @Json(name = "sessionId")
     val sessionId: String,  // Unique session identifier from SDK
     
-    @Json(name = "user_id")
+    @Json(name = "userId")
     val userId: String? = null,  // Optional user identifier if available
     
-    @Json(name = "device_id")
+    @Json(name = "deviceId")
     val deviceId: String,  // Unique device identifier
     
-    @Json(name = "advertising_id")
-    val advertisingId: String? = null,  // GAID (Google Advertising ID) for Android
+    @Json(name = "ifa")
+    val ifa: String? = null,  // GAID (Google Advertising ID) for Android
     
-    @Json(name = "os")
-    val os: String = "Android",  // Operating system
+    @Json(name = "platform")
+    val platform: String = "Android",  // Operating system
     
-    @Json(name = "os_version")
+    @Json(name = "osVersion")
     val osVersion: String,  // OS version (e.g., "11.0", "12.0")
     
     @Json(name = "parameters")
-    val parameters: Map<String, Any>? = null  // Additional event-specific data
+    val parameters: Map<String, String>? = null  // Additional event-specific data
 )

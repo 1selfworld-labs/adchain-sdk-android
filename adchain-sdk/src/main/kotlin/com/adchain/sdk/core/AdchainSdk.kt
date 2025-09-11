@@ -27,6 +27,26 @@ object AdchainSdk {
     private var validatedAppData: AppData? = null
     private val handler = Handler(Looper.getMainLooper())
     private val coroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
+    private const val PREFS_NAME = "adchain_prefs"
+    private const val KEY_CURRENT_USER_ID = "currentUserId"
+
+    private fun saveCurrentUserId(userId: String) {
+        val app = application ?: return
+        val prefs = app.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        prefs.edit().putString(KEY_CURRENT_USER_ID, userId).apply()
+    }
+
+    private fun getSavedUserId(): String {
+        val app = application ?: return ""
+        val prefs = app.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        return prefs.getString(KEY_CURRENT_USER_ID, "") ?: ""
+    }
+
+    private fun clearSavedUserId() {
+        val app = application ?: return
+        val prefs = app.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        prefs.edit().remove(KEY_CURRENT_USER_ID).apply()
+    }
     
     @JvmStatic
     fun initialize(
@@ -52,18 +72,7 @@ object AdchainSdk {
                 
                 // Mark as initialized immediately to allow SDK usage
                 isInitialized.set(true)
-                
-                // Track SDK initialization event
-                NetworkManager.trackEvent(
-                    userId = "",
-                    eventName = "sdk_initialized",
-                    category = "sdk",
-                    properties = mapOf(
-                        "app_key" to config?.appKey.orEmpty(),
-                        "sdk_version" to BuildConfig.VERSION_NAME
-                    )
-                )
-                
+
                 Log.d(TAG, "SDK validated successfully with server")
                 Log.d(TAG, "Offerwall URL: ${validatedAppData?.adchainHubUrl}")
             } else {
@@ -102,24 +111,41 @@ object AdchainSdk {
                 // Set current user first
                 // 아래 통신이 실패해도, 유저 바인딩은 진행
                 currentUser = adchainSdkUser
+
+                // 로컬 스토리지에 유저 아이디 저장 (Android SharedPreferences)
+                saveCurrentUserId(adchainSdkUser.userId)
+                
+                // Login to server (gender와 birthYear 포함)
+                try {
+                    val loginResponse = NetworkManager.login(
+                        userId = adchainSdkUser.userId,
+                        eventName = "user_login",
+                        sdkVersion = BuildConfig.VERSION_NAME,
+                        gender = adchainSdkUser.gender?.value,  // Gender enum의 value (M/F)
+                        birthYear = adchainSdkUser.birthYear,  // birthYear 전달
+                        category = "authentication",
+                        properties = mapOf("user_id" to adchainSdkUser.userId)
+                    )
+                    
+                    if (loginResponse.isSuccess) {
+                        Log.d(TAG, "Login successful: ${loginResponse.getOrNull()?.success}")
+                    } else {
+                        Log.e(TAG, "Login failed but continuing: ${loginResponse.exceptionOrNull()}")
+                    }
+                } catch (e: Exception) {
+                    Log.e(TAG, "Login failed but continuing", e)
+                }
                 
                 // Track session start event for DAU
                 NetworkManager.trackEvent(
                     userId = adchainSdkUser.userId,
                     eventName = "session_start",
+                    sdkVersion = BuildConfig.VERSION_NAME,
                     category = "session",
                     properties = mapOf(
                         "user_id" to adchainSdkUser.userId,
                         "session_id" to java.util.UUID.randomUUID().toString()
                     )
-                )
-                
-                // Track login event
-                NetworkManager.trackEvent(
-                    userId = adchainSdkUser.userId,
-                    eventName = "user_login",
-                    category = "authentication",
-                    properties = mapOf("user_id" to adchainSdkUser.userId)
                 )
                 
                 // Login successful
@@ -142,8 +168,9 @@ object AdchainSdk {
                     NetworkManager.trackEvent(
                         userId = userToLogout.userId,
                         eventName = "user_logout",
+                        sdkVersion = BuildConfig.VERSION_NAME,
                         category = "authentication",
-                        properties = mapOf("user_id" to userToLogout.userId)
+                        properties = mapOf("userId" to userToLogout.userId)
                     )
                 } catch (e: Exception) {
                     android.util.Log.e("AdchainSdk", "Failed to track logout event", e)
@@ -151,6 +178,7 @@ object AdchainSdk {
             }
         }
         currentUser = null
+        clearSavedUserId()
     }
     
     @JvmStatic
@@ -164,7 +192,7 @@ object AdchainSdk {
     fun getConfig(): AdchainSdkConfig? = config
     
     @JvmStatic
-    fun getApplication(): Application? = application
+    internal fun getApplication(): Application? = application
     
     internal fun requireInitialized() {
         require(isInitialized.get()) { "AdchainSdk must be initialized before use" }
@@ -220,6 +248,7 @@ object AdchainSdk {
             NetworkManager.trackEvent(
                 userId = currentUser?.userId ?: "",
                 eventName = "offerwall_opened",
+                sdkVersion = BuildConfig.VERSION_NAME,
                 category = "offerwall",
                 properties = mapOf(
                     "source" to "sdk_api"

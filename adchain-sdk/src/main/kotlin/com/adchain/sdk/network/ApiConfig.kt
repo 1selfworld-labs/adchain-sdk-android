@@ -27,5 +27,6 @@ object ApiConfig {
         const val TRACK_EVENT = "v1/api/sdk/event"  // 변경: v1/api/analytics/event -> v1/api/sdk/event
         const val GET_QUIZ_EVENTS = "v1/api/quiz"
         const val GET_MISSIONS = "v1/api/mission"
+        const val GET_BANNER = "v1/api/sdk/banner"  // 변경: v1/api/banner -> v1/api/sdk/banner
     }
 }

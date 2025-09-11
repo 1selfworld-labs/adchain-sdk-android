@@ -17,7 +17,7 @@ android {
         consumerProguardFiles("consumer-rules.pro")
         
         // Get version from gradle.properties
-        val sdkVersion = project.findProperty("SDK_VERSION") as String? ?: "1.0.0"
+        val sdkVersion = (project.findProperty("SDK_VERSION") as? String) ?: "1.0.4"
         buildConfigField("String", "VERSION_NAME", "\"$sdkVersion\"")
     }
 
@@ -83,9 +83,6 @@ dependencies {
     implementation("com.squareup.retrofit2:converter-moshi:2.9.0")
     implementation("com.squareup.moshi:moshi:1.15.0")
     implementation("com.squareup.moshi:moshi-kotlin:1.15.0")
-    
-    // Image Loading
-    implementation("com.github.bumptech.glide:glide:4.16.0")
     
     // Testing
     testImplementation("junit:junit:4.13.2")

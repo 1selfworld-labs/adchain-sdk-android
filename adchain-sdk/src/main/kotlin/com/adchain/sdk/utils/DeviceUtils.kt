@@ -119,8 +119,8 @@ object DeviceUtils {
             
             // Check if user has opted out of ad tracking
             if (adInfo.isLimitAdTrackingEnabled) {
-                Log.d(TAG, "User has opted out of ad tracking")
-                return@withContext null
+                Log.d(TAG, "User has opted out of ad tracking, returning zero ID")
+                return@withContext "00000000-0000-0000-0000-000000000000"
             }
             
             val advertisingId = adInfo.id
@@ -141,17 +141,17 @@ object DeviceUtils {
             
             advertisingId
         } catch (e: GooglePlayServicesNotAvailableException) {
-            Log.e(TAG, "Google Play Services not available", e)
-            null
+            Log.e(TAG, "Google Play Services not available, returning zero ID", e)
+            "00000000-0000-0000-0000-000000000000"
         } catch (e: GooglePlayServicesRepairableException) {
-            Log.e(TAG, "Google Play Services need to be updated", e)
-            null
+            Log.e(TAG, "Google Play Services need to be updated, returning zero ID", e)
+            "00000000-0000-0000-0000-000000000000"
         } catch (e: IOException) {
-            Log.e(TAG, "Unable to retrieve advertising ID", e)
-            null
+            Log.e(TAG, "Unable to retrieve advertising ID, returning zero ID", e)
+            "00000000-0000-0000-0000-000000000000"
         } catch (e: Exception) {
-            Log.e(TAG, "Unexpected error retrieving advertising ID", e)
-            null
+            Log.e(TAG, "Unexpected error retrieving advertising ID, returning zero ID", e)
+            "00000000-0000-0000-0000-000000000000"
         }
     }
     
@@ -203,7 +203,7 @@ object DeviceUtils {
      * This only returns cached value, doesn't fetch new one
      */
     fun getAdvertisingIdSync(context: Context?): String? {
-        if (context == null) return null
+        if (context == null) return "00000000-0000-0000-0000-000000000000"
         
         // Return cached value if available
         val currentTime = System.currentTimeMillis()
@@ -223,7 +223,82 @@ object DeviceUtils {
             return storedAdId
         }
         
-        return null
+        // If no cached value available, return zero ID
+        return "00000000-0000-0000-0000-000000000000"
+    }
+    
+    /**
+     * Get country code from system locale
+     */
+    fun getCountryCode(): String? {
+        return try {
+            java.util.Locale.getDefault().country.takeIf { it.isNotEmpty() }
+        } catch (e: Exception) {
+            Log.e(TAG, "Error getting country code", e)
+            null
+        }
+    }
+    
+    /**
+     * Get language code from system locale
+     */
+    fun getLanguageCode(): String? {
+        return try {
+            java.util.Locale.getDefault().language.takeIf { it.isNotEmpty() }
+        } catch (e: Exception) {
+            Log.e(TAG, "Error getting language code", e)
+            null
+        }
+    }
+    
+    /**
+     * Get installer package name (e.g., "com.android.vending" for Google Play)
+     * Returns "unknown" if installer cannot be determined
+     */
+    fun getInstaller(context: Context): String? {
+        return try {
+            val installer = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                context.packageManager.getInstallSourceInfo(context.packageName).installingPackageName
+            } else {
+                @Suppress("DEPRECATION")
+                context.packageManager.getInstallerPackageName(context.packageName)
+            }
+            
+            when (installer) {
+                null -> {
+                    // 앱이 ADB나 APK 직접 설치 등으로 설치된 경우
+                    Log.d(TAG, "No installer found, likely installed via ADB or direct APK")
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                        // Android O 이상에서는 InstallSourceInfo를 통해 더 자세한 정보 확인 가능
+                        try {
+                            val sourceInfo = context.packageManager.getInstallSourceInfo(context.packageName)
+                            when {
+                                sourceInfo.initiatingPackageName != null -> sourceInfo.initiatingPackageName
+                                sourceInfo.originatingPackageName != null -> sourceInfo.originatingPackageName
+                                else -> "sideload"  // APK 직접 설치
+                            }
+                        } catch (e: Exception) {
+                            "sideload"
+                        }
+                    } else {
+                        "sideload"  // 구버전에서는 sideload로 표시
+                    }
+                }
+                "com.android.vending" -> "google_play"  // Google Play Store
+                "com.amazon.venezia" -> "amazon_appstore"  // Amazon Appstore
+                "com.sec.android.app.samsungapps" -> "galaxy_store"  // Samsung Galaxy Store
+                "com.xiaomi.market" -> "mi_store"  // Xiaomi Mi Store
+                "com.huawei.appmarket" -> "huawei_appgallery"  // Huawei AppGallery
+                "com.oppo.market" -> "oppo_store"  // OPPO App Market
+                "com.vivo.appstore" -> "vivo_store"  // Vivo App Store
+                "com.android.packageinstaller" -> "package_installer"  // Default package installer
+                "com.google.android.packageinstaller" -> "package_installer"  // Google package installer
+                else -> installer  // 기타 installer는 패키지명 그대로 반환
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Error getting installer package: ${e.message}", e)
+            "unknown"
+        }
     }
     
     /**

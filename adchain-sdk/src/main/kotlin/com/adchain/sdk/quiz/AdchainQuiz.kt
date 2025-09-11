@@ -1,8 +1,8 @@
 package com.adchain.sdk.quiz
 
-import android.content.Context
 import android.content.Intent
 import android.util.Log
+import com.adchain.sdk.BuildConfig
 import com.adchain.sdk.core.AdchainSdk
 import com.adchain.sdk.common.AdchainAdError
 import com.adchain.sdk.network.ApiClient
@@ -11,6 +11,7 @@ import com.adchain.sdk.network.NetworkManager
 import com.adchain.sdk.offerwall.AdchainOfferwallActivity
 import com.adchain.sdk.offerwall.OfferwallCallback
 import com.adchain.sdk.quiz.models.QuizEvent
+import com.adchain.sdk.utils.DeviceUtils
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -27,39 +28,55 @@ class AdchainQuiz(private val unitId: String) {
     }
     
     private var quizEvents: List<QuizEvent> = emptyList()
-    private var listener: AdchainQuizEventsListener? = null
-    private var loadSuccessCallback: ((List<QuizEvent>) -> Unit)? = null
-    private var loadFailureCallback: ((AdchainAdError) -> Unit)? = null
+    private var lastOnSuccess: ((List<QuizEvent>) -> Unit)? = null
+    private var lastOnFailure: ((AdchainAdError) -> Unit)? = null
     private val coroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
     private val apiService: ApiService by lazy {
         ApiClient.createService(ApiService::class.java)
     }
     
-    fun setQuizEventsListener(listener: AdchainQuizEventsListener) {
-        this.listener = listener
-    }
-    
-    fun load(
+    /**
+     * Get quiz list from server
+     * Automatically tracks impression when quiz list is fetched
+     */
+    fun getQuizList(
         onSuccess: (List<QuizEvent>) -> Unit,
         onFailure: (AdchainAdError) -> Unit
     ) {
         // Store callbacks for refresh
-        loadSuccessCallback = onSuccess
-        loadFailureCallback = onFailure
+        lastOnSuccess = onSuccess
+        lastOnFailure = onFailure
         
         coroutineScope.launch {
             try {
-                val userId = AdchainSdk.getCurrentUser()?.userId
+                val currentUser = AdchainSdk.getCurrentUser()
+                val context = AdchainSdk.getApplication()
+                
+                // Get advertising ID
+                val advertisingId = withContext(Dispatchers.IO) {
+                    context?.let {
+                        DeviceUtils.getAdvertisingIdSync(it) ?: DeviceUtils.getAdvertisingId(it)
+                    }
+                }
                 
                 val response = withContext(Dispatchers.IO) {
-                    //apiService.getQuizEvents(userId)
-                    apiService.getQuizEvents()
+                    apiService.getQuizEvents(
+                        userId = currentUser?.userId,
+                        platform = "Android",
+                        ifa = advertisingId
+                    )
                 }
                 
                 if (response.isSuccessful) {
                     response.body()?.let { quizResponse ->
                         quizEvents = quizResponse.events
                         Log.d(TAG, "Loaded ${quizEvents.size} quiz events")
+                        
+                        // Track impression for all quizzes
+                        quizEvents.forEach { quiz ->
+                            trackImpression(quiz)
+                        }
+                        
                         onSuccess(quizEvents)
                     } ?: run {
                         Log.e(TAG, "Empty response body")
@@ -76,80 +93,86 @@ class AdchainQuiz(private val unitId: String) {
         }
     }
     
-    fun trackImpression(quizEvent: QuizEvent) {
+    private fun trackImpression(quizEvent: QuizEvent) {
         Log.d(TAG, "Tracking impression for quiz: ${quizEvent.id}")
-        listener?.onImpressed(quizEvent)
         
         coroutineScope.launch {
             val userId = AdchainSdk.getCurrentUser()?.userId ?: ""
             NetworkManager.trackEvent(
                 userId = userId,
                 eventName = "quiz_impressed",
+                sdkVersion = BuildConfig.VERSION_NAME,
                 category = "quiz",
                 properties = mapOf(
-                    "quiz_id" to quizEvent.id,
-                    "quiz_title" to quizEvent.title
+                    "quizId" to quizEvent.id,
+                    "quizTitle" to quizEvent.title
                 )
             )
         }
     }
     
-    fun trackClick(quizEvent: QuizEvent) {
+    private fun trackClick(quizEvent: QuizEvent) {
         Log.d(TAG, "Tracking click for quiz: ${quizEvent.id}")
-        listener?.onClicked(quizEvent)
         
         coroutineScope.launch {
             val userId = AdchainSdk.getCurrentUser()?.userId ?: ""
             NetworkManager.trackEvent(
                 userId = userId,
                 eventName = "quiz_clicked",
+                sdkVersion = BuildConfig.VERSION_NAME,
                 category = "quiz",
                 properties = mapOf(
-                    "quiz_id" to quizEvent.id,
-                    "quiz_title" to quizEvent.title,
-                    "landing_url" to quizEvent.landingUrl
+                    "quizId" to quizEvent.id,
+                    "quizTitle" to quizEvent.title,
+                    "landingUrl" to quizEvent.landingUrl
                 )
             )
         }
     }
     
-    internal fun notifyQuizCompleted(quizEvent: QuizEvent) {
-        listener?.onQuizCompleted(quizEvent, 0)  // Keep 0 for backward compatibility
-        
-        coroutineScope.launch {
-            val userId = AdchainSdk.getCurrentUser()?.userId ?: ""
-            NetworkManager.trackEvent(
-                userId = userId,
-                eventName = "quiz_completed",
-                category = "quiz",
-                properties = mapOf(
-                    "quiz_id" to quizEvent.id,
-                    "quiz_title" to quizEvent.title
-                )
-            )
+    /**
+     * Click a quiz by ID
+     * Tracks click event and opens WebView
+     */
+    fun clickQuiz(quizId: String) {
+        val quizEvent = quizEvents.find { it.id == quizId }
+        if (quizEvent == null) {
+            Log.e(TAG, "Quiz not found: $quizId")
+            return
         }
         
-        // Automatically refresh quiz list after completion
-        refreshAfterCompletion()
+        // Track click
+        trackClick(quizEvent)
+        
+        // Open WebView
+        openQuizWebView(quizEvent)
     }
     
+    /**
+     * Refresh quiz list after completion (internal use)
+     * Called when a quiz is completed to refresh the list
+     */
     internal fun refreshAfterCompletion() {
-        Log.d(TAG, "Refreshing quiz list after completion")
-        // Use stored callbacks to notify the UI
-        loadSuccessCallback?.let { successCallback ->
-            loadFailureCallback?.let { failureCallback ->
-                load(successCallback, failureCallback)
-            }
-        } ?: run {
-            // Fallback if callbacks are not stored
-            Log.w(TAG, "No callbacks stored for refresh, skipping UI update")
+        // Store current callbacks if they exist
+        val savedOnSuccess = lastOnSuccess
+        val savedOnFailure = lastOnFailure
+        
+        // Re-fetch quiz list if callbacks are available
+        if (savedOnSuccess != null && savedOnFailure != null) {
+            getQuizList(savedOnSuccess, savedOnFailure)
         }
     }
     
     /**
      * Opens quiz WebView using AdchainOfferwallActivity
      */
-    internal fun openQuizWebView(context: Context, quizEvent: QuizEvent) {
+    private fun openQuizWebView(quizEvent: QuizEvent) {
+        val context = AdchainSdk.getApplication()
+        if (context == null) {
+            Log.e(TAG, "Application context not available")
+            return
+        }
+        
         // Store reference for callback
         currentQuizInstance = WeakReference(this)
         currentQuizEvent = quizEvent
@@ -163,7 +186,6 @@ class AdchainQuiz(private val unitId: String) {
             
             override fun onClosed() {
                 Log.d(TAG, "Quiz WebView closed")
-                // Don't call onQuizCompleted here - only call it when JavaScript sends quizCompleted message
                 // Clear references
                 currentQuizInstance = null
                 currentQuizEvent = null
@@ -171,8 +193,6 @@ class AdchainQuiz(private val unitId: String) {
             
             override fun onError(message: String) {
                 Log.e(TAG, "Quiz WebView error: $message")
-                // Note: AdchainQuizEventsListener doesn't have onError method,
-                // so we just log the error for now
                 // Clear references
                 currentQuizInstance = null
                 currentQuizEvent = null
@@ -199,19 +219,5 @@ class AdchainQuiz(private val unitId: String) {
         }
         
         context.startActivity(intent)
-        
-        // Track quiz open
-        coroutineScope.launch {
-            val userId = AdchainSdk.getCurrentUser()?.userId ?: ""
-            NetworkManager.trackEvent(
-                userId = userId,
-                eventName = "quiz_webview_opened",
-                category = "quiz",
-                properties = mapOf(
-                    "quiz_id" to quizEvent.id,
-                    "url" to quizEvent.landingUrl
-                )
-            )
-        }
     }
 }

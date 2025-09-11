@@ -4,25 +4,28 @@ import com.squareup.moshi.Json
 import com.squareup.moshi.JsonClass
 
 @JsonClass(generateAdapter = true)
-data class ValidateAppRequest(
-    @Json(name = "device_info")
-    val deviceInfo: DeviceInfo? = null
-)
+class ValidateAppRequest
 
 @JsonClass(generateAdapter = true)
 data class DeviceInfo(
-    @Json(name = "device_id")
+    @Json(name = "deviceId")
     val deviceId: String,
-    @Json(name = "device_model")
+    @Json(name = "deviceModel")
     val deviceModel: String,
-    @Json(name = "device_model_name")
+    @Json(name = "deviceModelName")
     val deviceModelName: String? = null,
-    @Json(name = "os_version")
+    @Json(name = "manufacturer")
+    val manufacturer: String,
+    @Json(name = "platform")
+    val platform: String,
+    @Json(name = "osVersion")
     val osVersion: String,
-    @Json(name = "app_version")
-    val appVersion: String? = null,
-    @Json(name = "advertising_id")
-    val advertisingId: String? = null,
-    @Json(name = "is_limit_ad_tracking_enabled")
-    val isLimitAdTrackingEnabled: Boolean = false
+    @Json(name = "country")
+    val country: String? = null,
+    @Json(name = "language")
+    val language: String? = null,
+    @Json(name = "installer")
+    val installer: String? = null,
+    @Json(name = "ifa")
+    val ifa: String? = null
 )

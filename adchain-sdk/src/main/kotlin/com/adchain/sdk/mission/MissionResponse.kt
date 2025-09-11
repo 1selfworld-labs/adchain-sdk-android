@@ -13,7 +13,7 @@ data class MissionResponse(
     val current: Int = 0,
     @Json(name = "total")
     val total: Int = 0,
-    @Json(name = "reward_url")
+    @Json(name = "rewardUrl")  // snake_case에서 camelCase로 변경
     val rewardUrl: String? = null,
     @Json(name = "message")
     val message: String? = null

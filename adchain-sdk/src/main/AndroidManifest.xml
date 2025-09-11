@@ -8,11 +8,6 @@
     <uses-permission android:name="com.google.android.gms.permission.AD_ID" />
     
     <application>
-        <activity
-            android:name=".hub.AdchainHubActivity"
-            android:configChanges="orientation|screenSize|keyboardHidden"
-            android:theme="@style/Theme.AppCompat.Light.DarkActionBar" />
-        
         <!-- Offerwall Activity -->
         <activity
             android:name=".offerwall.AdchainOfferwallActivity"

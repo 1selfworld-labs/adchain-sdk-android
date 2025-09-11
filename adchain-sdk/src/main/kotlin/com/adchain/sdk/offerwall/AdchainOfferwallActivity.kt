@@ -5,14 +5,17 @@ import android.content.ActivityNotFoundException
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
+import android.os.Build
 import android.os.Bundle
 import android.util.Log
 import android.view.ViewGroup
 import android.webkit.*
 import android.widget.Toast
+import androidx.activity.OnBackPressedCallback
 import androidx.appcompat.app.AppCompatActivity
 import com.adchain.sdk.BuildConfig
 import com.adchain.sdk.core.AdchainSdk
+import com.adchain.sdk.mission.AdchainMission
 import com.adchain.sdk.network.NetworkManager
 import com.adchain.sdk.quiz.AdchainQuiz
 import com.adchain.sdk.utils.DeviceUtils
@@ -52,7 +55,7 @@ internal class AdchainOfferwallActivity : AppCompatActivity() {
                 putExtra(EXTRA_BASE_URL, url)
                 putExtra(EXTRA_IS_SUB_WEBVIEW, true)
                 putExtra(EXTRA_USER_ID, AdchainSdk.getCurrentUser()?.userId)
-                putExtra(EXTRA_APP_ID, AdchainSdk.getConfig()?.appId)
+                putExtra(EXTRA_APP_ID, AdchainSdk.getConfig()?.appKey)
                 addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
             }
             context.startActivity(intent)
@@ -117,6 +120,9 @@ internal class AdchainOfferwallActivity : AppCompatActivity() {
         
         // Setup WebView
         setupWebView()
+        
+        // Setup back press handler
+        setupBackPressHandler()
         
         // Build and load URL
         val finalUrl = if (isSubWebView) {
@@ -198,23 +204,22 @@ internal class AdchainOfferwallActivity : AppCompatActivity() {
             
             // Device info
             appendQueryParameter("device_id", DeviceUtils.getDeviceId(this@AdchainOfferwallActivity))
-            appendQueryParameter("os", "Android")
+            appendQueryParameter("platform", "Android")
             appendQueryParameter("os_version", DeviceUtils.getOsVersion())
             appendQueryParameter("device_model", DeviceUtils.getDeviceModel())
             appendQueryParameter("device_manufacturer", DeviceUtils.getDeviceManufacturer())
             
             // SDK info
             appendQueryParameter("sdk_version", BuildConfig.VERSION_NAME)
-            appendQueryParameter("sdk_platform", "Android")
             
             // Session info
             appendQueryParameter("session_id", NetworkManager.getSessionId())
             appendQueryParameter("timestamp", System.currentTimeMillis().toString())
             
-            // Add advertising ID if available (synchronously from cache)
+            // Add IFA (advertising ID) if available (synchronously from cache)
             val advertisingId = DeviceUtils.getAdvertisingIdSync(this@AdchainOfferwallActivity)
             if (!advertisingId.isNullOrEmpty()) {
-                appendQueryParameter("advertising_id", advertisingId)
+                appendQueryParameter("ifa", advertisingId)
             }
         }
         
@@ -225,7 +230,7 @@ internal class AdchainOfferwallActivity : AppCompatActivity() {
                 val freshAdvertisingId = DeviceUtils.getAdvertisingId(this@AdchainOfferwallActivity)
                 if (!freshAdvertisingId.isNullOrEmpty()) {
                     webView.evaluateJavascript(
-                        "if(window.AdchainConfig) { window.AdchainConfig.advertisingId = '$freshAdvertisingId'; }",
+                        "if(window.AdchainConfig) { window.AdchainConfig.ifa = '$freshAdvertisingId'; }",
                         null
                     )
                 }
@@ -256,6 +261,7 @@ internal class AdchainOfferwallActivity : AppCompatActivity() {
             NetworkManager.trackEvent(
                 userId = userId,
                 eventName = "offerwall_closed",
+                sdkVersion = BuildConfig.VERSION_NAME,
                 category = "offerwall"
             )
         }
@@ -263,19 +269,26 @@ internal class AdchainOfferwallActivity : AppCompatActivity() {
         finish()
     }
     
-    override fun onBackPressed() {
-        if (webView.canGoBack()) {
-            webView.goBack()
-        } else {
-            // If this is a sub WebView, just close it
-            if (isSubWebView) {
-                finish()
-            } else {
-                // Main WebView - close everything
-                closeOfferwall()
+    // Handle back press using OnBackPressedCallback for Android 13+ compatibility
+    private fun setupBackPressHandler() {
+        onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
+            override fun handleOnBackPressed() {
+                if (webView.canGoBack()) {
+                    webView.goBack()
+                } else {
+                    // If this is a sub WebView, just close it
+                    if (isSubWebView) {
+                        finish()
+                    } else {
+                        // Main WebView - close everything
+                        closeOfferwall()
+                    }
+                    // Remove this callback to allow default behavior
+                    isEnabled = false
+                    onBackPressedDispatcher.onBackPressed()
+                }
             }
-            super.onBackPressed()
-        }
+        })
     }
     
     override fun onDestroy() {
@@ -405,7 +418,8 @@ internal class AdchainOfferwallActivity : AppCompatActivity() {
                 "externalOpenBrowser" -> handleExternalOpenBrowser(data)
                 // Quiz-specific message types
                 "quizCompleted" -> if (contextType == "quiz") handleQuizCompleted(data)
-                "quizStarted" -> if (contextType == "quiz") handleQuizStarted(data)
+                // Mission-specific message types
+                "missionCompleted" -> handleMissionCompleted(data)
                 "getUserInfo" -> handleGetUserInfo()
                 else -> Log.w(TAG, "Unknown message type: $type")
             }
@@ -435,6 +449,7 @@ internal class AdchainOfferwallActivity : AppCompatActivity() {
             NetworkManager.trackEvent(
                 userId = userId,
                 eventName = "sub_webview_opened",
+                sdkVersion = BuildConfig.VERSION_NAME,
                 category = "offerwall",
                 properties = mapOf("url" to url)
             )
@@ -451,16 +466,6 @@ internal class AdchainOfferwallActivity : AppCompatActivity() {
             // Close main offerwall
             if (!isSubWebView) {
                 callback?.onClosed()
-                
-                // Track event
-                coroutineScope.launch {
-                    val userId = intent.getStringExtra(EXTRA_USER_ID) ?: ""
-                    NetworkManager.trackEvent(
-                        userId = userId,
-                        eventName = "offerwall_closed_by_js",
-                        category = "offerwall"
-                    )
-                }
             }
             
             finish()
@@ -482,7 +487,7 @@ internal class AdchainOfferwallActivity : AppCompatActivity() {
                 putExtra(EXTRA_BASE_URL, url)
                 putExtra(EXTRA_IS_SUB_WEBVIEW, true)
                 putExtra(EXTRA_USER_ID, AdchainSdk.getCurrentUser()?.userId)
-                putExtra(EXTRA_APP_ID, AdchainSdk.getConfig()?.appId)
+                putExtra(EXTRA_APP_ID, AdchainSdk.getConfig()?.appKey)
                 // Clear current activity and create new one
                 flags = Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_NEW_TASK
             }
@@ -492,7 +497,18 @@ internal class AdchainOfferwallActivity : AppCompatActivity() {
             
             // Close current activity with fade animation
             finish()
-            overridePendingTransition(android.R.anim.fade_in, android.R.anim.fade_out)
+            
+            // Use new API for Android 14+ (API 34), fallback for older versions
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+                overrideActivityTransition(
+                    OVERRIDE_TRANSITION_OPEN,
+                    android.R.anim.fade_in,
+                    android.R.anim.fade_out
+                )
+            } else {
+                @Suppress("DEPRECATION")
+                overridePendingTransition(android.R.anim.fade_in, android.R.anim.fade_out)
+            }
             
             // Track event
             coroutineScope.launch {
@@ -500,6 +516,7 @@ internal class AdchainOfferwallActivity : AppCompatActivity() {
                 NetworkManager.trackEvent(
                     userId = userId,
                     eventName = "webview_replaced",
+                    sdkVersion = BuildConfig.VERSION_NAME,
                     category = "offerwall",
                     properties = mapOf("url" to url)
                 )
@@ -527,6 +544,7 @@ internal class AdchainOfferwallActivity : AppCompatActivity() {
                     NetworkManager.trackEvent(
                         userId = userId,
                         eventName = "external_browser_opened",
+                        sdkVersion = BuildConfig.VERSION_NAME,
                         category = "offerwall",
                         properties = mapOf("url" to url)
                     )
@@ -554,35 +572,49 @@ internal class AdchainOfferwallActivity : AppCompatActivity() {
                 NetworkManager.trackEvent(
                     userId = userId,
                     eventName = "quiz_completed",
+                    sdkVersion = BuildConfig.VERSION_NAME,
                     category = "quiz",
                     properties = mapOf(
                         "quiz_id" to quizId
                     )
                 )
+                
+                // Refresh quiz list after completion (before clearing reference)
+                AdchainQuiz.currentQuizInstance?.get()?.refreshAfterCompletion()
+                
+                // Notify callback with quiz result (this will clear currentQuizInstance)
+                callback?.onClosed()
             }
-            
-            // Trigger quiz list refresh in SDK
-            AdchainQuiz.currentQuizInstance?.get()?.refreshAfterCompletion()
-            
-            // Notify callback with quiz result
-            callback?.onClosed()
             // Don't finish() - let WebView stay open for user to continue or close manually
         }
     }
     
-    private fun handleQuizStarted(data: JSONObject?) {
-        Log.d(TAG, "Quiz started")
+    private fun handleMissionCompleted(data: JSONObject?) {
+        Log.d(TAG, "Mission completed")
         
-        coroutineScope.launch {
-            val userId = intent.getStringExtra(EXTRA_USER_ID) ?: ""
-            val quizId = intent.getStringExtra(EXTRA_QUIZ_ID) ?: ""
-            
-            NetworkManager.trackEvent(
-                userId = userId,
-                eventName = "quiz_started",
-                category = "quiz",
-                properties = mapOf("quiz_id" to quizId)
-            )
+        val missionId = data?.optString("missionId") ?: ""
+        
+        runOnUiThread {
+            // Track mission completion
+            coroutineScope.launch {
+                val userId = intent.getStringExtra(EXTRA_USER_ID) ?: ""
+                
+                NetworkManager.trackEvent(
+                    userId = userId,
+                    eventName = "mission_completed",
+                    sdkVersion = BuildConfig.VERSION_NAME,
+                    category = "mission",
+                    properties = mapOf(
+                        "mission_id" to missionId
+                    )
+                )
+                
+                // Refresh mission list after completion
+                AdchainMission.currentMissionInstance?.refreshAfterCompletion()
+                
+                // Notify callback
+                callback?.onClosed()
+            }
         }
     }
     
