@@ -38,15 +38,19 @@ class AdchainMission(private val unitId: String) {
      * Get mission list from server
      * Automatically tracks impression when mission list is fetched
      */
+    @JvmOverloads
     fun getMissionList(
         onSuccess: (List<Mission>) -> Unit,
-        onFailure: (AdchainAdError) -> Unit
+        onFailure: (AdchainAdError) -> Unit,
+        shouldStoreCallbacks: Boolean = true
     ) {
         Log.d(TAG, "Loading missions for unit: $unitId")
         
-        // Store callbacks for refresh
-        lastOnSuccess = onSuccess
-        lastOnFailure = onFailure
+        // Store callbacks for refresh (only if requested)
+        if (shouldStoreCallbacks) {
+            lastOnSuccess = onSuccess
+            lastOnFailure = onFailure
+        }
         
         if (!AdchainSdk.isLoggedIn) {
             Log.e(TAG, "SDK not initialized or user not logged in")
@@ -330,7 +334,7 @@ class AdchainMission(private val unitId: String) {
         
         // Re-fetch mission list if callbacks are available
         if (savedOnSuccess != null && savedOnFailure != null) {
-            getMissionList(savedOnSuccess, savedOnFailure)
+            getMissionList(savedOnSuccess, savedOnFailure, shouldStoreCallbacks = false)
         } else {
             Log.w(TAG, "No callbacks stored for refresh, skipping UI update")
         }

@@ -39,13 +39,17 @@ class AdchainQuiz(private val unitId: String) {
      * Get quiz list from server
      * Automatically tracks impression when quiz list is fetched
      */
+    @JvmOverloads
     fun getQuizList(
         onSuccess: (List<QuizEvent>) -> Unit,
-        onFailure: (AdchainAdError) -> Unit
+        onFailure: (AdchainAdError) -> Unit,
+        shouldStoreCallbacks: Boolean = true
     ) {
-        // Store callbacks for refresh
-        lastOnSuccess = onSuccess
-        lastOnFailure = onFailure
+        // Store callbacks for refresh (only if requested)
+        if (shouldStoreCallbacks) {
+            lastOnSuccess = onSuccess
+            lastOnFailure = onFailure
+        }
         
         coroutineScope.launch {
             try {
@@ -159,7 +163,7 @@ class AdchainQuiz(private val unitId: String) {
         
         // Re-fetch quiz list if callbacks are available
         if (savedOnSuccess != null && savedOnFailure != null) {
-            getQuizList(savedOnSuccess, savedOnFailure)
+            getQuizList(savedOnSuccess, savedOnFailure, shouldStoreCallbacks = false)
         }
     }
     
