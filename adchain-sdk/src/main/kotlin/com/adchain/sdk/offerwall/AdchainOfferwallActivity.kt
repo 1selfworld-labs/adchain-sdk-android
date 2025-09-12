@@ -582,8 +582,10 @@ internal class AdchainOfferwallActivity : AppCompatActivity() {
                 // Refresh quiz list after completion (before clearing reference)
                 AdchainQuiz.currentQuizInstance?.get()?.refreshAfterCompletion()
                 
-                // Notify callback with quiz result (this will clear currentQuizInstance)
-                callback?.onClosed()
+                // DO NOT call onClosed() here
+                // Quiz completion should only trigger data refresh, not close the WebView
+                // The WebView should remain open until user manually closes it
+                // callback?.onClosed() // Removed to prevent duplicate callback invocation
             }
             // Don't finish() - let WebView stay open for user to continue or close manually
         }
@@ -612,8 +614,10 @@ internal class AdchainOfferwallActivity : AppCompatActivity() {
                 // Refresh mission list after completion
                 AdchainMission.currentMissionInstance?.refreshAfterCompletion()
                 
-                // Notify callback
-                callback?.onClosed()
+                // DO NOT call onClosed() here
+                // Mission completion should only trigger data refresh, not close the WebView
+                // The WebView should remain open until user manually closes it
+                // callback?.onClosed() // Removed to prevent duplicate callback invocation
             }
         }
     }
