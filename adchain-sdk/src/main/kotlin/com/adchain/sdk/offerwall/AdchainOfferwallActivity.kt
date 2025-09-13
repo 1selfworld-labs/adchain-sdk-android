@@ -579,8 +579,17 @@ internal class AdchainOfferwallActivity : AppCompatActivity() {
                     )
                 )
                 
-                // Refresh quiz list after completion (before clearing reference)
-                AdchainQuiz.currentQuizInstance?.get()?.refreshAfterCompletion()
+                // Notify quiz completion and refresh list
+                val quizInstance = AdchainQuiz.currentQuizInstance?.get()
+                val quizEvent = AdchainQuiz.currentQuizEvent
+                
+                if (quizInstance != null && quizEvent != null) {
+                    // iOS와 동일한 방식: 리스너 호출
+                    quizInstance.notifyQuizCompleted(quizEvent)
+                } else {
+                    // Fallback: 리스너가 없으면 기존 방식으로 새로고침
+                    quizInstance?.refreshAfterCompletion()
+                }
                 
                 // DO NOT call onClosed() here
                 // Quiz completion should only trigger data refresh, not close the WebView
@@ -611,8 +620,17 @@ internal class AdchainOfferwallActivity : AppCompatActivity() {
                     )
                 )
                 
-                // Refresh mission list after completion
-                AdchainMission.currentMissionInstance?.refreshAfterCompletion()
+                // Notify mission completion and refresh list
+                val missionInstance = AdchainMission.currentMissionInstance
+                val mission = AdchainMission.currentMission
+                
+                if (missionInstance != null && mission != null) {
+                    // iOS와 동일한 방식: 리스너 호출
+                    missionInstance.onMissionCompleted(mission)
+                } else {
+                    // Fallback: 리스너가 없으면 기존 방식으로 새로고침
+                    missionInstance?.refreshAfterCompletion()
+                }
                 
                 // DO NOT call onClosed() here
                 // Mission completion should only trigger data refresh, not close the WebView

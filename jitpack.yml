@@ -2,15 +2,15 @@
 jdk:
   - openjdk17
 
-# Build command
+before_install:
+  - chmod +x ./gradlew
+
+# Build command with explicit artifact publication
 install:
   - echo "Building AdChain SDK..."
   - ./gradlew clean
-  - ./gradlew :adchain-sdk:assembleRelease
+  - ./gradlew :adchain-sdk:build
   - ./gradlew :adchain-sdk:publishToMavenLocal
   - echo "Build completed successfully!"
-
-# Optional: specify the library module
-# This tells JitPack which module to publish
-before_install:
-  - chmod +x ./gradlew
+  - echo "Published artifacts:"
+  - ls -la ~/.m2/repository/com/github/1selfworld-labs/adchain-sdk/

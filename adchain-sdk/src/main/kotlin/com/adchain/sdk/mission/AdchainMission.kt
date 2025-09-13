@@ -18,7 +18,7 @@ class AdchainMission(private val unitId: String) {
         private const val TAG = "AdchainMission"
         // 강한 참조 유지 - 메모리 사용량이 크지 않으므로 계속 유지
         internal var currentMissionInstance: AdchainMission? = null
-        private var currentMission: Mission? = null
+        internal var currentMission: Mission? = null
     }
     
     private var missions: List<Mission> = emptyList()
@@ -33,6 +33,13 @@ class AdchainMission(private val unitId: String) {
     // Store callbacks for refresh
     private var lastOnSuccess: ((List<Mission>) -> Unit)? = null
     private var lastOnFailure: ((AdchainAdError) -> Unit)? = null
+    
+    // Event listener (iOS와 동일한 방식)
+    private var eventsListener: AdchainMissionEventsListener? = null
+    
+    fun setEventsListener(listener: AdchainMissionEventsListener) {
+        this.eventsListener = listener
+    }
     
     /**
      * Get mission list from server
@@ -319,6 +326,34 @@ class AdchainMission(private val unitId: String) {
         
         // Track mission open
         Log.d(TAG, "Opening mission WebView for mission: ${mission.id}")
+    }
+    
+    /**
+     * Called when a mission is completed - notifies listener
+     * iOS와 동일한 방식
+     */
+    internal fun onMissionCompleted(mission: Mission) {
+        Log.d(TAG, "Mission completed: ${mission.id}")
+        
+        // Notify listener
+        eventsListener?.onCompleted(mission)
+        
+        // Track completion
+        coroutineScope.launch {
+            NetworkManager.trackEvent(
+                userId = AdchainSdk.getCurrentUser()?.userId ?: "",
+                eventName = "mission_completed",
+                sdkVersion = BuildConfig.VERSION_NAME,
+                category = "mission",
+                properties = mapOf(
+                    "missionId" to mission.id,
+                    "missionTitle" to mission.title
+                )
+            )
+        }
+        
+        // Refresh list
+        refreshAfterCompletion()
     }
     
     /**

@@ -24,7 +24,7 @@ class AdchainQuiz(private val unitId: String) {
     companion object {
         private const val TAG = "AdchainQuiz"
         internal var currentQuizInstance: WeakReference<AdchainQuiz>? = null
-        private var currentQuizEvent: QuizEvent? = null
+        internal var currentQuizEvent: QuizEvent? = null
     }
     
     private var quizEvents: List<QuizEvent> = emptyList()
@@ -33,6 +33,13 @@ class AdchainQuiz(private val unitId: String) {
     private val coroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
     private val apiService: ApiService by lazy {
         ApiClient.createService(ApiService::class.java)
+    }
+    
+    // Event listener (iOS와 동일한 방식)
+    private var eventsListener: AdchainQuizEventsListener? = null
+    
+    fun setQuizEventsListener(listener: AdchainQuizEventsListener) {
+        this.eventsListener = listener
     }
     
     /**
@@ -150,6 +157,34 @@ class AdchainQuiz(private val unitId: String) {
         
         // Open WebView
         openQuizWebView(quizEvent)
+    }
+    
+    /**
+     * Called when a quiz is completed - notifies listener
+     * iOS와 동일한 방식
+     */
+    internal fun notifyQuizCompleted(quizEvent: QuizEvent) {
+        Log.d(TAG, "Quiz completed: ${quizEvent.id}")
+        
+        // Notify listener
+        eventsListener?.onQuizCompleted(quizEvent, 0)
+        
+        // Track completion
+        coroutineScope.launch {
+            NetworkManager.trackEvent(
+                userId = AdchainSdk.getCurrentUser()?.userId ?: "",
+                eventName = "quiz_completed",
+                sdkVersion = BuildConfig.VERSION_NAME,
+                category = "quiz",
+                properties = mapOf(
+                    "quizId" to quizEvent.id,
+                    "quizTitle" to quizEvent.title
+                )
+            )
+        }
+        
+        // Refresh list
+        refreshAfterCompletion()
     }
     
     /**

@@ -102,7 +102,7 @@ afterEvaluate {
             register<MavenPublication>("release") {
                 // JitPack uses GitHub-based groupId
                 groupId = "com.github.1selfworld-labs"
-                artifactId = "adchain-sdk-android"
+                artifactId = "adchain-sdk"
                 version = project.findProperty("SDK_VERSION") as String? ?: "1.0.0"
 
                 from(components["release"])
