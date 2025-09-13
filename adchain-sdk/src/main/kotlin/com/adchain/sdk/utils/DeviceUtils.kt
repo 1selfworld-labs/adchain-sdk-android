@@ -114,16 +114,27 @@ object DeviceUtils {
                 return@withContext storedAdId
             }
             
-            // Fetch new advertising ID
-            val adInfo = AdvertisingIdClient.getAdvertisingIdInfo(context)
+            // Check if Google Play Services is available before attempting to use it
+            if (!isGooglePlayServicesAvailable()) {
+                Log.d(TAG, "Google Play Services not available, returning zero ID")
+                return@withContext "00000000-0000-0000-0000-000000000000"
+            }
             
-            // Check if user has opted out of ad tracking
-            if (adInfo.isLimitAdTrackingEnabled) {
+            // Fetch new advertising ID using reflection to avoid NoClassDefFoundError
+            val adInfo = getAdvertisingIdInfoSafely(context) ?: return@withContext "00000000-0000-0000-0000-000000000000"
+            
+            // Check if user has opted out of ad tracking using reflection
+            val isLimitedMethod = adInfo.javaClass.getMethod("isLimitAdTrackingEnabled")
+            val isLimited = isLimitedMethod.invoke(adInfo) as? Boolean ?: false
+            
+            if (isLimited) {
                 Log.d(TAG, "User has opted out of ad tracking, returning zero ID")
                 return@withContext "00000000-0000-0000-0000-000000000000"
             }
             
-            val advertisingId = adInfo.id
+            // Get advertising ID using reflection
+            val getIdMethod = adInfo.javaClass.getMethod("getId")
+            val advertisingId = getIdMethod.invoke(adInfo) as? String
             
             // Cache the advertising ID
             if (advertisingId != null) {
@@ -140,18 +151,46 @@ object DeviceUtils {
             }
             
             advertisingId
-        } catch (e: GooglePlayServicesNotAvailableException) {
-            Log.e(TAG, "Google Play Services not available, returning zero ID", e)
+        } catch (e: ClassNotFoundException) {
+            Log.e(TAG, "Google Play Services classes not found, returning zero ID", e)
             "00000000-0000-0000-0000-000000000000"
-        } catch (e: GooglePlayServicesRepairableException) {
-            Log.e(TAG, "Google Play Services need to be updated, returning zero ID", e)
-            "00000000-0000-0000-0000-000000000000"
-        } catch (e: IOException) {
-            Log.e(TAG, "Unable to retrieve advertising ID, returning zero ID", e)
+        } catch (e: NoClassDefFoundError) {
+            Log.e(TAG, "Google Play Services not available in classpath, returning zero ID", e)
             "00000000-0000-0000-0000-000000000000"
         } catch (e: Exception) {
-            Log.e(TAG, "Unexpected error retrieving advertising ID, returning zero ID", e)
+            Log.e(TAG, "Error retrieving advertising ID: ${e.message}", e)
             "00000000-0000-0000-0000-000000000000"
+        }
+    }
+    
+    /**
+     * Check if Google Play Services is available using reflection
+     */
+    private fun isGooglePlayServicesAvailable(): Boolean {
+        return try {
+            Class.forName("com.google.android.gms.ads.identifier.AdvertisingIdClient")
+            Class.forName("com.google.android.gms.common.GooglePlayServicesUtil")
+            true
+        } catch (e: ClassNotFoundException) {
+            Log.d(TAG, "Google Play Services classes not found")
+            false
+        } catch (e: NoClassDefFoundError) {
+            Log.d(TAG, "Google Play Services not available")
+            false
+        }
+    }
+    
+    /**
+     * Get advertising ID info safely using reflection to avoid NoClassDefFoundError
+     */
+    private fun getAdvertisingIdInfoSafely(context: Context): Any? {
+        return try {
+            val clazz = Class.forName("com.google.android.gms.ads.identifier.AdvertisingIdClient")
+            val method = clazz.getMethod("getAdvertisingIdInfo", Context::class.java)
+            method.invoke(null, context)
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to get advertising ID info via reflection: ${e.message}")
+            null
         }
     }
     
@@ -190,8 +229,24 @@ object DeviceUtils {
         if (context == null) return@withContext false
         
         try {
-            val adInfo = AdvertisingIdClient.getAdvertisingIdInfo(context)
-            adInfo.isLimitAdTrackingEnabled
+            // Check if Google Play Services is available
+            if (!isGooglePlayServicesAvailable()) {
+                Log.d(TAG, "Google Play Services not available for checking ad tracking status")
+                return@withContext false
+            }
+            
+            // Get advertising ID info safely using reflection
+            val adInfo = getAdvertisingIdInfoSafely(context) ?: return@withContext false
+            
+            // Get limit ad tracking status using reflection
+            val isLimitedMethod = adInfo.javaClass.getMethod("isLimitAdTrackingEnabled")
+            isLimitedMethod.invoke(adInfo) as? Boolean ?: false
+        } catch (e: ClassNotFoundException) {
+            Log.e(TAG, "Google Play Services classes not found", e)
+            false
+        } catch (e: NoClassDefFoundError) {
+            Log.e(TAG, "Google Play Services not available", e)
+            false
         } catch (e: Exception) {
             Log.e(TAG, "Error checking limit ad tracking status", e)
             false
