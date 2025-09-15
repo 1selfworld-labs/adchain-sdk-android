@@ -317,10 +317,10 @@ class AdchainMission(private val unitId: String) {
      */
     internal fun onMissionCompleted(mission: Mission) {
         Log.d(TAG, "Mission completed: ${mission.id}")
-        
+
         // Notify listener
         eventsListener?.onCompleted(mission)
-        
+
         // Track completion
         coroutineScope.launch {
             NetworkManager.trackEvent(
@@ -334,9 +334,36 @@ class AdchainMission(private val unitId: String) {
                 )
             )
         }
-        
+
         // Refresh list
         refreshAfterCompletion()
+    }
+
+    /**
+     * Called when a mission progress is updated - notifies listener
+     * iOS와 동일한 방식
+     */
+    internal fun onMissionProgressed(mission: Mission) {
+        Log.d(TAG, "Mission progressed: ${mission.id}")
+
+        // Notify listener
+        eventsListener?.onProgressed(mission)
+
+        // Track progress (optional, could be too frequent)
+        coroutineScope.launch {
+            NetworkManager.trackEvent(
+                userId = AdchainSdk.getCurrentUser()?.userId ?: "",
+                eventName = "mission_progressed",
+                sdkVersion = BuildConfig.VERSION_NAME,
+                category = "mission",
+                properties = mapOf(
+                    "missionId" to mission.id,
+                    "missionTitle" to mission.title
+                )
+            )
+        }
+
+        // Note: We don't call refreshAfterCompletion here as progress doesn't require full refresh
     }
     
     /**

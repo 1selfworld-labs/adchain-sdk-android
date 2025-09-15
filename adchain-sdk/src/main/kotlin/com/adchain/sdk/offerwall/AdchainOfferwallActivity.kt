@@ -420,6 +420,7 @@ internal class AdchainOfferwallActivity : AppCompatActivity() {
                 "quizCompleted" -> if (contextType == "quiz") handleQuizCompleted(data)
                 // Mission-specific message types
                 "missionCompleted" -> handleMissionCompleted(data)
+                "missionProgressed" -> handleMissionProgressed(data)
                 "getUserInfo" -> handleGetUserInfo()
                 else -> Log.w(TAG, "Unknown message type: $type")
             }
@@ -602,14 +603,14 @@ internal class AdchainOfferwallActivity : AppCompatActivity() {
     
     private fun handleMissionCompleted(data: JSONObject?) {
         Log.d(TAG, "Mission completed")
-        
+
         val missionId = data?.optString("missionId") ?: ""
-        
+
         runOnUiThread {
             // Track mission completion
             coroutineScope.launch {
                 val userId = intent.getStringExtra(EXTRA_USER_ID) ?: ""
-                
+
                 NetworkManager.trackEvent(
                     userId = userId,
                     eventName = "mission_completed",
@@ -619,11 +620,11 @@ internal class AdchainOfferwallActivity : AppCompatActivity() {
                         "mission_id" to missionId
                     )
                 )
-                
+
                 // Notify mission completion and refresh list
                 val missionInstance = AdchainMission.currentMissionInstance
                 val mission = AdchainMission.currentMission
-                
+
                 if (missionInstance != null && mission != null) {
                     // iOS와 동일한 방식: 리스너 호출
                     missionInstance.onMissionCompleted(mission)
@@ -631,7 +632,7 @@ internal class AdchainOfferwallActivity : AppCompatActivity() {
                     // Fallback: 리스너가 없으면 기존 방식으로 새로고침
                     missionInstance?.refreshAfterCompletion()
                 }
-                
+
                 // DO NOT call onClosed() here
                 // Mission completion should only trigger data refresh, not close the WebView
                 // The WebView should remain open until user manually closes it
@@ -639,7 +640,45 @@ internal class AdchainOfferwallActivity : AppCompatActivity() {
             }
         }
     }
-    
+
+    private fun handleMissionProgressed(data: JSONObject?) {
+        Log.d(TAG, "Mission progressed")
+
+        val missionId = data?.optString("missionId") ?: ""
+
+        runOnUiThread {
+            // Track mission progress
+            coroutineScope.launch {
+                val userId = intent.getStringExtra(EXTRA_USER_ID) ?: ""
+
+                NetworkManager.trackEvent(
+                    userId = userId,
+                    eventName = "mission_progressed",
+                    sdkVersion = BuildConfig.VERSION_NAME,
+                    category = "mission",
+                    properties = mapOf(
+                        "mission_id" to missionId
+                    )
+                )
+
+                // Notify mission progress (without progress parameter)
+                val missionInstance = AdchainMission.currentMissionInstance
+                val mission = AdchainMission.currentMission
+
+                if (missionInstance != null && mission != null) {
+                    Log.d(TAG, "🔄 [Android SDK - WebView] Mission 진행 알림...")
+                    missionInstance.onMissionProgressed(mission)
+                    Log.d(TAG, "✅ [Android SDK - WebView] Mission 진행 알림 완료!")
+                } else {
+                    Log.w(TAG, "⚠️ [Android SDK - WebView] Mission instance 또는 mission을 찾을 수 없음")
+                }
+
+                // DO NOT call onClosed() here
+                // Mission progress should only trigger UI update, not close the WebView
+            }
+        }
+    }
+
     private fun handleGetUserInfo() {
         AdchainSdk.getCurrentUser()?.let { user ->
             val userInfo = JSONObject().apply {

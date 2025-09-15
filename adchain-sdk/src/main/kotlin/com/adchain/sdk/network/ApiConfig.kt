@@ -4,7 +4,7 @@ import com.adchain.sdk.BuildConfig
 
 object ApiConfig {
     const val SDK_VERSION = "1.0.4"
-    const val PLATFORM = "android"
+    const val PLATFORM = "Android"
     
     enum class Environment(val baseUrl: String) {
         PRODUCTION("https://adchain-api.1self.world/"),

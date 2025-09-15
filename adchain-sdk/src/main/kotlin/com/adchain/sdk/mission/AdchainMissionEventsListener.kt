@@ -4,4 +4,5 @@ interface AdchainMissionEventsListener {
     fun onClicked(mission: Mission)
     fun onImpressed(mission: Mission)
     fun onCompleted(mission: Mission)
+    fun onProgressed(mission: Mission)
 }
