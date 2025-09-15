@@ -53,23 +53,28 @@ object AdchainSdk {
         application: Application,
         sdkConfig: AdchainSdkConfig
     ) {
-        require(!isInitialized.get()) { "AdchainSdk is already initialized" }
+        // Check if already initialized and return early with log message
+        if (isInitialized.get()) {
+            Log.w(TAG, "AdchainSdk is already initialized. Skipping re-initialization.")
+            return
+        }
+
         require(sdkConfig.appKey.isNotEmpty()) { "App Key cannot be empty" }
         require(sdkConfig.appSecret.isNotEmpty()) { "App Secret cannot be empty" }
-        
+
         this.application = application
         this.config = sdkConfig
-        
+
         // Initialize network manager
         NetworkManager.initialize()
-        
+
         // Validate app credentials with server asynchronously
         coroutineScope.launch {
             val result = NetworkManager.validateApp()
             if (result.isSuccess) {
                 // Store validated app data
                 validatedAppData = result.getOrNull()?.app
-                
+
                 // Mark as initialized immediately to allow SDK usage
                 isInitialized.set(true)
 

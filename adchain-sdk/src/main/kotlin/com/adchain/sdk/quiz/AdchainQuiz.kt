@@ -57,7 +57,13 @@ class AdchainQuiz(private val unitId: String) {
             lastOnSuccess = onSuccess
             lastOnFailure = onFailure
         }
-        
+
+        if (!AdchainSdk.isLoggedIn) {
+            Log.e(TAG, "SDK not initialized or user not logged in")
+            onFailure(AdchainAdError.NOT_INITIALIZED)
+            return
+        }
+
         coroutineScope.launch {
             try {
                 val currentUser = AdchainSdk.getCurrentUser()

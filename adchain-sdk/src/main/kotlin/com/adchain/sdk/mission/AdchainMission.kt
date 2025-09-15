@@ -96,23 +96,6 @@ class AdchainMission(private val unitId: String) {
                             total = missionResp.total
                         )
                         
-                        // Add offerwall promotion if missions are not completed
-                        if (missionResp.current < missionResp.total && missionResp.total > 0) {
-                            val offerwallPromotion = Mission(
-                                id = "offerwall_promotion",
-                                title = "800만 포인트 받으러 가기",
-                                description = "더 많은 포인트를 받을 수 있습니다",
-                                point = "800만 포인트",
-                                imageUrl = "",
-                                landingUrl = "",
-                                status = null,
-                                progress = null,
-                                total = null,
-                                type = MissionType.OFFERWALL_PROMOTION
-                            )
-                            missionsToShow.add(offerwallPromotion)
-                        }
-                        
                         missions = missionsToShow
                         
                         Log.d(TAG, "Loaded ${missions.size} missions, progress: ${missionResp.current}/${missionResp.total}, reward_url: ${rewardUrl}")
