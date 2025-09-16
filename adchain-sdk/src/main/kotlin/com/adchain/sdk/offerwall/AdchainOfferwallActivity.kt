@@ -1,5 +1,6 @@
 package com.adchain.sdk.offerwall
 
+// TEST MODIFICATION: React Native Local SDK Build Test - 2025-01-16 18:30
 import android.annotation.SuppressLint
 import android.content.ActivityNotFoundException
 import android.content.Context
@@ -10,9 +11,13 @@ import android.os.Bundle
 import android.util.Log
 import android.view.ViewGroup
 import android.webkit.*
+import android.widget.FrameLayout
 import android.widget.Toast
 import androidx.activity.OnBackPressedCallback
 import androidx.appcompat.app.AppCompatActivity
+import androidx.core.view.ViewCompat
+import androidx.core.view.WindowCompat
+import androidx.core.view.WindowInsetsCompat
 import com.adchain.sdk.BuildConfig
 import com.adchain.sdk.core.AdchainSdk
 import com.adchain.sdk.mission.AdchainMission
@@ -78,13 +83,22 @@ internal class AdchainOfferwallActivity : AppCompatActivity() {
     @SuppressLint("SetJavaScriptEnabled")
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        
+
+        // Enable Edge-to-Edge for Android 30+ to properly handle window insets
+        // This is required for proper inset handling
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            Log.d(TAG, "Setting Edge-to-Edge: setDecorFitsSystemWindows(false)")
+            WindowCompat.setDecorFitsSystemWindows(window, false)
+        } else {
+            Log.d(TAG, "SDK < 30, not setting Edge-to-Edge")
+        }
+
         // Check if this is a sub WebView
         isSubWebView = intent.getBooleanExtra(EXTRA_IS_SUB_WEBVIEW, false)
-        
+
         // Get context type (offerwall or quiz)
         contextType = intent.getStringExtra(EXTRA_CONTEXT_TYPE) ?: "offerwall"
-        
+
         // Setup action bar title based on context
         if (contextType == "quiz") {
             supportActionBar?.apply {
@@ -92,20 +106,61 @@ internal class AdchainOfferwallActivity : AppCompatActivity() {
                 setDisplayHomeAsUpEnabled(true)
             }
         }
-        
+
         // Add to stack if this is a sub WebView
         if (isSubWebView) {
             webViewStack.push(WeakReference(this))
         }
-        
-        // Create WebView
-        webView = WebView(this).apply {
+
+        // Create container layout that will handle insets
+        val container = FrameLayout(this).apply {
             layoutParams = ViewGroup.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
                 ViewGroup.LayoutParams.MATCH_PARENT
             )
         }
-        setContentView(webView)
+
+        // Create WebView
+        webView = WebView(this).apply {
+            layoutParams = FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.MATCH_PARENT,
+                FrameLayout.LayoutParams.MATCH_PARENT
+            )
+        }
+
+        container.addView(webView)
+        setContentView(container)
+
+        // Apply padding to container instead of margin to WebView
+        // This ensures the WebView content is properly positioned
+        ViewCompat.setOnApplyWindowInsetsListener(container) { v, windowInsets ->
+            val insets = windowInsets.getInsets(WindowInsetsCompat.Type.systemBars())
+
+            Log.d(TAG, "Applying container padding - bottom: ${insets.bottom}, top: ${insets.top}")
+
+            // Apply padding to the container using system-provided values
+            v.setPadding(0, insets.top, 0, insets.bottom)
+
+            // Don't consume the insets, let them pass through
+            windowInsets
+        }
+
+        // Also set a fallback for WebView itself
+        webView.post {
+            // Get the root window insets directly
+            ViewCompat.getRootWindowInsets(container)?.let { rootInsets ->
+                val insets = rootInsets.getInsets(WindowInsetsCompat.Type.systemBars())
+
+                if (container.paddingBottom == 0 && insets.bottom > 0) {
+                    Log.d(TAG, "Fallback: Applying container padding - bottom: ${insets.bottom}, top: ${insets.top}")
+                    container.setPadding(0, insets.top, 0, insets.bottom)
+                }
+            }
+        }
+
+        // Additional debugging
+        Log.d(TAG, "Window flags: ${window.attributes.flags}")
+        Log.d(TAG, "Window softInputMode: ${window.attributes.softInputMode}")
         
         // Get base URL from intent
         val baseUrl = intent.getStringExtra(EXTRA_BASE_URL)

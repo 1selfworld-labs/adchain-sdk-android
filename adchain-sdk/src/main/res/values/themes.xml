@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Adchain SDK Theme for WebView Activity -->
+    <style name="AdchainSDKTheme" parent="Theme.AppCompat.Light.NoActionBar">
+        <!-- Status bar configuration -->
+        <item name="android:statusBarColor">@android:color/transparent</item>
+
+        <!-- Navigation bar configuration -->
+        <item name="android:navigationBarColor">@android:color/transparent</item>
+
+        <!-- Window configuration for Edge-to-Edge display -->
+        <item name="android:windowLightStatusBar">false</item>
+
+        <!-- Allow content to extend into display cutout area (notch) -->
+        <item name="android:windowLayoutInDisplayCutoutMode">shortEdges</item>
+
+        <!-- Ensure window draws system bar backgrounds -->
+        <item name="android:windowDrawsSystemBarBackgrounds">true</item>
+
+        <!-- Disable forced dark mode -->
+        <item name="android:forceDarkAllowed">false</item>
+    </style>
+</resources>

@@ -11,9 +11,18 @@
         <!-- Offerwall Activity -->
         <activity
             android:name=".offerwall.AdchainOfferwallActivity"
+            android:screenOrientation="portrait"
             android:configChanges="orientation|screenSize|keyboardHidden"
-            android:theme="@style/Theme.AppCompat.Light.NoActionBar"
-            android:hardwareAccelerated="true" />
+            android:theme="@style/AdchainSDKTheme"
+            android:windowSoftInputMode="adjustResize"
+            android:hardwareAccelerated="true"
+            android:exported="false">
+
+            <!-- Android 15 (SDK 35) Edge-to-Edge 비활성화 -->
+            <meta-data
+                android:name="android.window.ENABLE_EDGE_TO_EDGE"
+                android:value="false" />
+        </activity>
         
         
     </application>
