@@ -323,8 +323,8 @@ object DeviceUtils {
                 null -> {
                     // 앱이 ADB나 APK 직접 설치 등으로 설치된 경우
                     Log.d(TAG, "No installer found, likely installed via ADB or direct APK")
-                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                        // Android O 이상에서는 InstallSourceInfo를 통해 더 자세한 정보 확인 가능
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                        // Android R (API 30) 이상에서는 InstallSourceInfo를 통해 더 자세한 정보 확인 가능
                         try {
                             val sourceInfo = context.packageManager.getInstallSourceInfo(context.packageName)
                             when {
