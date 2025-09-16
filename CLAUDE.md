@@ -2,172 +2,96 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-## Build Commands
+## Build & Development Commands
 
+### Primary Build Commands
 ```bash
-# Clean build artifacts
+# Clean and build the SDK
 ./gradlew clean
+./gradlew :adchain-sdk:build
 
-# Build release AAR
+# Assemble release AAR
 ./gradlew :adchain-sdk:assembleRelease
 
-# Full build with tests
-./gradlew build
+# Run tests
+./gradlew :adchain-sdk:test
 
 # Run lint checks
 ./gradlew lint
 
-# Run unit tests
-./gradlew test
-
-# Run Android instrumented tests (requires device/emulator)
-./gradlew connectedAndroidTest
-
-# Publish to local Maven repository for testing
+# Build and publish to local Maven (for testing)
 ./gradlew :adchain-sdk:publishToMavenLocal
+```
 
-# Publish to remote repository
-./gradlew :adchain-sdk:publish
+### Deployment Commands
+```bash
+# Update version in gradle.properties (SDK_VERSION=1.0.X)
+# Then commit and create tag
+git tag -a "v1.0.X" -m "Release v1.0.X"
+git push origin "v1.0.X"
+
+# JitPack will automatically build after tag push
+# Check build status at: https://jitpack.io/#1selfworld-labs/adchain-sdk-android
 ```
 
 ## Architecture Overview
 
 ### SDK Structure
-The AdChain SDK follows a modular architecture with clear separation of concerns:
+The SDK is a single-module Android library that provides three main features:
+1. **Offerwall** - WebView-based offerwall display with JavaScript bridge
+2. **Mission System** - Task completion tracking with reward URLs
+3. **Quiz System** - Interactive quiz participation
 
-- **Core Module** (`com.adchain.sdk.core`): Contains the main `AdchainSdk` singleton class that manages initialization, user sessions, and SDK lifecycle
-- **Network Layer** (`com.adchain.sdk.network`): Handles all API communications using Retrofit/OkHttp with Moshi for JSON parsing
-- **Feature Modules**: 
-  - `offerwall`: Manages offerwall advertisements display and interactions
-  - `quiz`: Handles quiz-based advertisement features
-  - `mission`: Manages mission-based advertisement tasks
-- **Utils** (`com.adchain.sdk.utils`): Shared utilities including logging, constants, and helpers
+### Core Components
 
-### Key Design Patterns
-- **Singleton**: Main SDK class uses singleton pattern for global instance management
-- **Builder**: Configuration objects use builder pattern for flexible setup
-- **Observer**: Event callbacks and listeners for asynchronous operations
-- **Factory**: Component creation for network and ad features
+**Initialization Flow:**
+- `AdchainSdk.initialize()` validates app credentials with server
+- Stores `AppData` including the offerwall URL (`adchainHubUrl`)
+- User login via `AdchainSdk.login()` authenticates and stores user session
 
-### Threading Model
-- Uses Kotlin Coroutines for asynchronous operations
-- Main thread for UI operations, background threads for network calls
-- Callback interfaces for async result delivery
-
-## Project Configuration
+**Key Classes:**
+- `AdchainSdk` - Main entry point, handles initialization and user management
+- `AdchainOfferwallActivity` - WebView container with JavaScript interface for offerwall
+- `AdchainMission` - Mission list fetching and completion tracking
+- `AdchainQuiz` - Quiz participation management
+- `NetworkManager` - Centralized API communication using Retrofit
 
 ### Version Management
-- SDK version defined in `gradle.properties` as `SDK_VERSION`
-- Current version: 1.0.4
-- Version should be updated before each release
+- Version is defined in `gradle.properties` as `SDK_VERSION`
+- This version is injected into `BuildConfig.VERSION_NAME` during build
+- Git tags must include 'v' prefix (e.g., v1.0.11) for JitPack
 
-### SDK Requirements
-- minSdk: 24 (Android 7.0)
-- targetSdk: 34
-- compileSdk: 35
-- Java/Kotlin target: 17
+### API Integration
+The SDK communicates with the Adchain backend:
+- Base URL: `https://reward.api.adchain.plus/` (production)
+- Authentication: App key/secret for initialization, user token for operations
+- All API responses follow a standard format with `code`, `msg`, and `data` fields
 
-### Critical Dependencies
-- Retrofit/OkHttp for networking
-- Moshi for JSON serialization
-- Kotlin Coroutines for async operations
-- Google Play Services for advertising ID
-- Glide for image loading
+### WebView Bridge Protocol
+The offerwall uses a JavaScript bridge (`AdchainAndroidBridge`) for native-web communication:
+- `postMessage()` for web-to-native messages
+- Handles navigation, mission completion, quiz participation
+- Supports deep linking and external URL opening
 
-## Publishing & Distribution
+## Important Deployment Notes
 
-### JitPack (Recommended)
-- Configured via `jitpack.yml`
-- Builds triggered by Git tags/releases
-- Group ID: `com.github.fly33499`
-- Artifact ID: `ad-chain-sdk`
+### JitPack Configuration
+- Uses `jitpack.yml` for build configuration with OpenJDK 17
+- Publishes to Maven coordinates: `com.github.1selfworld-labs:adchain-sdk-android:vX.X.X`
+- Build logs available at: `https://jitpack.io/com/github/1selfworld-labs/adchain-sdk-android/[version]/build.log`
 
-### GitHub Packages
-- Requires authentication token
-- Publishing via `./gradlew :adchain-sdk:publish`
-- Repository URL configured in `build.gradle.kts`
+### Critical Files
+- `gradle.properties` - Contains `SDK_VERSION` (must be updated for each release)
+- `adchain-sdk/build.gradle.kts` - SDK configuration and dependencies
+- `jitpack.yml` - JitPack build configuration (requires OpenJDK 17)
 
-### Version Bumping Process
-1. Update `SDK_VERSION` in `gradle.properties`
-2. Commit changes with message: `chore: Bump version to X.Y.Z`
-3. Create Git tag: `git tag vX.Y.Z`
-4. Push tag: `git push origin vX.Y.Z`
-
-## Code Modification Guidelines
-
-### ProGuard Rules
-- Located in `adchain-sdk/proguard-rules.pro`
-- Must preserve SDK public APIs
-- Keep networking library models
-- Test thoroughly after ProGuard changes
-
-### Required Permissions
-The SDK requires these permissions in AndroidManifest.xml:
-- `android.permission.INTERNET`
-- `android.permission.ACCESS_NETWORK_STATE`
-- `com.google.android.gms.permission.AD_ID`
-
-### API Integration Points
-- Base URL and endpoints defined in `NetworkManager`
-- API responses handled with Moshi converters
-- Error handling through sealed Result classes
-
-## Testing Strategy
-
-### Unit Tests
-- Test directory: `adchain-sdk/src/test/`
-- Run with: `./gradlew test`
-- Focus on business logic and data transformations
-
-### Instrumented Tests
-- Test directory: `adchain-sdk/src/androidTest/`
-- Run with: `./gradlew connectedAndroidTest`
-- Test UI components and Android-specific features
-
-### Integration Testing
-- Test SDK initialization and API calls
-- Verify callback mechanisms
-- Test error scenarios and edge cases
-
-## Documentation Updates
-
-When making changes, update relevant documentation:
-- `/SDK_INTEGRATION_GUIDE.md` - For API changes or new features
-- `/JITPACK_GUIDE.md` - For distribution changes
-- Version-specific changes in commit messages
-- API documentation in code comments
-
-## Common Development Tasks
-
-### Adding New Ad Format
-1. Create new package under `com.adchain.sdk.<format>`
-2. Implement format-specific manager class
-3. Add initialization in main SDK class
-4. Update ProGuard rules if needed
-5. Add integration examples to documentation
-
-### Updating Network Endpoints
-1. Modify `ApiService` interface in network package
-2. Update data models if response format changes
-3. Test with network interceptor for debugging
-4. Verify error handling for new endpoints
-
-### Debugging Network Issues
-- Enable OkHttp logging interceptor in debug builds
-- Check network permissions in manifest
-- Verify base URL and endpoint configurations
-- Use Charles/Proxyman for traffic inspection
-
-## Build Troubleshooting
+### Testing Integration
+To test SDK integration locally:
+1. Build and publish to local Maven: `./gradlew :adchain-sdk:publishToMavenLocal`
+2. In consumer app, add: `mavenLocal()` to repositories
+3. Use dependency: `implementation 'com.adchain.sdk:adchain-sdk:1.0.X'`
 
 ### Common Issues
-- **Gradle sync fails**: Check Java version (must be 17+)
-- **AAR not building**: Run `./gradlew clean` first
-- **JitPack build fails**: Check `jitpack.yml` configuration
-- **Duplicate class errors**: Check dependency conflicts
-
-### Environment Setup
-- Android Studio Hedgehog or newer recommended
-- Gradle 8.2+ required
-- Enable Gradle daemon for faster builds
-- Configure `gradle.properties` for optimal performance
+- **JitPack build failures**: Check JDK version in jitpack.yml (must be openjdk17)
+- **Version mismatches**: Ensure gradle.properties SDK_VERSION matches git tag
+- **WebView issues**: Check ProGuard rules for WebView JavaScript interface
