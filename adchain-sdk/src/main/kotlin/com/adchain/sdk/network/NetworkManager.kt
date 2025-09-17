@@ -1,13 +1,14 @@
 package com.adchain.sdk.network
 
 import android.os.Build
-import android.util.Log
 import com.adchain.sdk.core.AdchainSdk
+import com.adchain.sdk.utils.AdchainLogger
 import com.adchain.sdk.network.models.request.DeviceInfo
 import com.adchain.sdk.network.models.request.LoginInfo
 import com.adchain.sdk.network.models.request.LoginRequest
 import com.adchain.sdk.network.models.request.TrackEventRequest
 import com.adchain.sdk.network.models.request.ValidateAppRequest
+import com.adchain.sdk.network.models.response.BannerInfoResponse
 import com.adchain.sdk.network.models.response.LoginResponse
 import com.adchain.sdk.network.models.response.ValidateAppResponse
 import com.adchain.sdk.utils.DeviceUtils
@@ -30,7 +31,7 @@ object NetworkManager {
                 apiService = ApiClient.createService(ApiService::class.java)
                 isInitialized = true
             } catch (e: Exception) {
-                Log.e(TAG, "Failed to initialize network manager", e)
+                AdchainLogger.e(TAG, "Failed to initialize network manager", e)
             }
         }
     }
@@ -45,15 +46,15 @@ object NetworkManager {
             
             if (response.isSuccessful) {
                 response.body()?.let {
-                    Log.d(TAG, "App validated successfully: ${it.app?.appName}")
+                    AdchainLogger.i(TAG, "App validated successfully: ${it.app?.appName}")
                     Result.success(it)
                 } ?: Result.failure(Exception("Empty response body"))
             } else {
-                Log.e(TAG, "App validation failed: ${response.code()}")
+                AdchainLogger.e(TAG, "App validation failed: ${response.code()}")
                 Result.failure(Exception("Validation failed: ${response.code()}"))
             }
         } catch (e: Exception) {
-            Log.e(TAG, "Network error during app validation", e)
+            AdchainLogger.e(TAG, "Network error during app validation", e)
             Result.failure(e)
         }
     }
@@ -75,7 +76,7 @@ object NetworkManager {
             
             val context = AdchainSdk.getApplication()
             if (context == null) {
-                Log.e(TAG, "Application context is null")
+                AdchainLogger.e(TAG, "Application context is null")
                 return@withContext Result.failure(Exception("Application context not available"))
             }
             
@@ -84,7 +85,7 @@ object NetworkManager {
                 DeviceUtils.getAdvertisingIdSync(context) ?: 
                 DeviceUtils.getAdvertisingId(context)
             } catch (e: Exception) {
-                Log.w(TAG, "Failed to get advertising ID", e)
+                AdchainLogger.w(TAG, "Failed to get advertising ID: ${e.message}")
                 null
             }
             
@@ -129,26 +130,26 @@ object NetworkManager {
                 deviceInfo = deviceInfo
             )
             
-            Log.d(TAG, "=== Sending Login Request ===")
-            Log.d(TAG, "Device Info: $deviceInfo")
+            AdchainLogger.d(TAG, "=== Sending Login Request ===")
+            AdchainLogger.d(TAG, "Device Info: $deviceInfo")
             
             val response = apiService!!.login(request)
             
             if (response.isSuccessful) {
                 response.body()?.let {
-                    Log.d(TAG, "=== Login Success ===")
+                    AdchainLogger.i(TAG, "=== Login Success ===")
                     it.user?.let { user ->
-                        Log.d(TAG, "User ID: ${user.userId}")
-                        Log.d(TAG, "User Status: ${user.status ?: "unknown"}")
+                        AdchainLogger.d(TAG, "User ID: ${user.userId}")
+                        AdchainLogger.d(TAG, "User Status: ${user.status ?: "unknown"}")
                     }
                     Result.success(it)
                 } ?: Result.failure(Exception("Empty response body"))
             } else {
-                Log.e(TAG, "Login failed: ${response.code()}")
+                AdchainLogger.e(TAG, "Login failed: ${response.code()}")
                 Result.failure(Exception("Login failed: ${response.code()}"))
             }
         } catch (e: Exception) {
-            Log.e(TAG, "Network error during login", e)
+            AdchainLogger.e(TAG, "Network error during login", e)
             Result.failure(e)
         }
     }
@@ -167,7 +168,7 @@ object NetworkManager {
             
             val context = AdchainSdk.getApplication()
             if (context == null) {
-                Log.e(TAG, "Application context is null")
+                AdchainLogger.e(TAG, "Application context is null")
                 return@withContext Result.failure(Exception("Application context not available"))
             }
             
@@ -178,7 +179,7 @@ object NetworkManager {
                 // If not in cache, fetch asynchronously
                 DeviceUtils.getAdvertisingId(context)
             } catch (e: Exception) {
-                Log.w(TAG, "Failed to get advertising ID", e)
+                AdchainLogger.w(TAG, "Failed to get advertising ID: ${e.message}")
                 null
             }
             
@@ -210,24 +211,57 @@ object NetworkManager {
             )
             
             // Debug logging to verify platform field
-            Log.d(TAG, "TrackEvent Request - Platform: ${request.platform}")
-            Log.d(TAG, "TrackEvent Request - Full: $request")
+            AdchainLogger.d(TAG, "TrackEvent Request - Platform: ${request.platform}")
+            AdchainLogger.d(TAG, "TrackEvent Request - Full: $request")
             
             val response = apiService!!.trackEvent(request)
             
             if (response.isSuccessful) {
-                Log.d(TAG, "Event tracked: $eventName")
+                AdchainLogger.d(TAG, "Event tracked: $eventName")
                 Result.success(Unit)
             } else {
-                Log.e(TAG, "Event tracking failed: ${response.code()}")
+                AdchainLogger.e(TAG, "Event tracking failed: ${response.code()}")
                 Result.failure(Exception("Event tracking failed: ${response.code()}"))
             }
         } catch (e: Exception) {
-            Log.e(TAG, "Network error during event tracking", e)
+            AdchainLogger.e(TAG, "Network error during event tracking", e)
             Result.failure(e)
         }
     }
-    
+
+    suspend fun getBannerInfo(
+        userId: String,
+        placementId: String
+    ): Result<BannerInfoResponse> = withContext(Dispatchers.IO) {
+        try {
+            if (apiService == null) {
+                return@withContext Result.failure(Exception("Network manager not initialized"))
+            }
+
+            AdchainLogger.d(TAG, "Getting banner info for placement: $placementId")
+
+            val response = apiService!!.getBannerInfo(
+                userId = userId,
+                placementId = placementId,
+                platform = "android"
+            )
+
+            if (response.isSuccessful) {
+                response.body()?.let {
+                    AdchainLogger.d(TAG, "Banner info retrieved successfully")
+                    Result.success(it)
+                } ?: Result.failure(Exception("Empty response body"))
+            } else {
+                val errorMsg = "Failed to get banner info: ${response.code()} - ${response.message()}"
+                AdchainLogger.e(TAG, errorMsg)
+                Result.failure(Exception(errorMsg))
+            }
+        } catch (e: Exception) {
+            AdchainLogger.e(TAG, "Network error getting banner info", e)
+            Result.failure(e)
+        }
+    }
+
     // Native Ad tracking methods - removed as iOS SDK doesn't have these
     // If needed in the future, uncomment and add corresponding endpoints in ApiService
     /*

@@ -72,6 +72,7 @@ dependencies {
     
     // Google Play Services for Advertising ID
     implementation("com.google.android.gms:play-services-ads-identifier:18.0.1")
+    implementation("com.google.android.gms:play-services-base:18.2.0") // For GoogleApiAvailability
     
     // Coroutines
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3")

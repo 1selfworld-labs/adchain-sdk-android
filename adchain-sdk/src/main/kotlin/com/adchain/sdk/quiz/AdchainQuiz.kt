@@ -1,8 +1,8 @@
 package com.adchain.sdk.quiz
 
 import android.content.Intent
-import android.util.Log
 import com.adchain.sdk.BuildConfig
+import com.adchain.sdk.utils.AdchainLogger
 import com.adchain.sdk.core.AdchainSdk
 import com.adchain.sdk.common.AdchainAdError
 import com.adchain.sdk.network.ApiClient
@@ -59,7 +59,7 @@ class AdchainQuiz(private val unitId: String) {
         }
 
         if (!AdchainSdk.isLoggedIn) {
-            Log.e(TAG, "SDK not initialized or user not logged in")
+            AdchainLogger.e(TAG, "SDK not initialized or user not logged in")
             onFailure(AdchainAdError.NOT_INITIALIZED)
             return
         }
@@ -87,7 +87,7 @@ class AdchainQuiz(private val unitId: String) {
                 if (response.isSuccessful) {
                     response.body()?.let { quizResponse ->
                         quizEvents = quizResponse.events
-                        Log.d(TAG, "Loaded ${quizEvents.size} quiz events")
+                        AdchainLogger.i(TAG, "Loaded ${quizEvents.size} quiz events")
                         
                         // Track impression for all quizzes
                         quizEvents.forEach { quiz ->
@@ -96,22 +96,22 @@ class AdchainQuiz(private val unitId: String) {
                         
                         onSuccess(quizEvents)
                     } ?: run {
-                        Log.e(TAG, "Empty response body")
+                        AdchainLogger.e(TAG, "Empty response body")
                         onFailure(AdchainAdError.EMPTY_RESPONSE)
                     }
                 } else {
-                    Log.e(TAG, "Failed to load quiz events: ${response.code()}")
+                    AdchainLogger.e(TAG, "Failed to load quiz events: ${response.code()}")
                     onFailure(AdchainAdError.NETWORK_ERROR)
                 }
             } catch (e: Exception) {
-                Log.e(TAG, "Error loading quiz events", e)
+                AdchainLogger.e(TAG, "Error loading quiz events", e)
                 onFailure(AdchainAdError.UNKNOWN)
             }
         }
     }
     
     private fun trackImpression(quizEvent: QuizEvent) {
-        Log.d(TAG, "Tracking impression for quiz: ${quizEvent.id}")
+        AdchainLogger.d(TAG, "Tracking impression for quiz: ${quizEvent.id}")
         
         coroutineScope.launch {
             val userId = AdchainSdk.getCurrentUser()?.userId ?: ""
@@ -129,7 +129,7 @@ class AdchainQuiz(private val unitId: String) {
     }
     
     private fun trackClick(quizEvent: QuizEvent) {
-        Log.d(TAG, "Tracking click for quiz: ${quizEvent.id}")
+        AdchainLogger.d(TAG, "Tracking click for quiz: ${quizEvent.id}")
         
         coroutineScope.launch {
             val userId = AdchainSdk.getCurrentUser()?.userId ?: ""
@@ -154,7 +154,7 @@ class AdchainQuiz(private val unitId: String) {
     fun clickQuiz(quizId: String) {
         val quizEvent = quizEvents.find { it.id == quizId }
         if (quizEvent == null) {
-            Log.e(TAG, "Quiz not found: $quizId")
+            AdchainLogger.e(TAG, "Quiz not found: $quizId")
             return
         }
         
@@ -170,7 +170,7 @@ class AdchainQuiz(private val unitId: String) {
      * iOS와 동일한 방식
      */
     internal fun notifyQuizCompleted(quizEvent: QuizEvent) {
-        Log.d(TAG, "Quiz completed: ${quizEvent.id}")
+        AdchainLogger.i(TAG, "Quiz completed: ${quizEvent.id}")
         
         // Notify listener
         eventsListener?.onQuizCompleted(quizEvent, 0)
@@ -214,7 +214,7 @@ class AdchainQuiz(private val unitId: String) {
     private fun openQuizWebView(quizEvent: QuizEvent) {
         val context = AdchainSdk.getApplication()
         if (context == null) {
-            Log.e(TAG, "Application context not available")
+            AdchainLogger.e(TAG, "Application context not available")
             return
         }
         
@@ -225,26 +225,26 @@ class AdchainQuiz(private val unitId: String) {
         // Setup quiz callback
         val quizCallback = object : OfferwallCallback {
             override fun onOpened() {
-                Log.d(TAG, "Quiz WebView opened")
+                AdchainLogger.d(TAG, "Quiz WebView opened")
                 // Quiz opened tracking is already done below
             }
             
             override fun onClosed() {
-                Log.d(TAG, "Quiz WebView closed")
+                AdchainLogger.d(TAG, "Quiz WebView closed")
                 // Clear references
                 currentQuizInstance = null
                 currentQuizEvent = null
             }
             
             override fun onError(message: String) {
-                Log.e(TAG, "Quiz WebView error: $message")
+                AdchainLogger.e(TAG, "Quiz WebView error: $message")
                 // Clear references
                 currentQuizInstance = null
                 currentQuizEvent = null
             }
             
             override fun onRewardEarned(amount: Int) {
-                Log.d(TAG, "Quiz reward earned: $amount")
+                AdchainLogger.d(TAG, "Quiz reward earned: $amount")
                 // Can be used if quiz has rewards
             }
         }

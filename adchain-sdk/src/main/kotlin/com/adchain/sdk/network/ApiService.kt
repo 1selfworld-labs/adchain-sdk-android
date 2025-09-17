@@ -3,9 +3,9 @@ package com.adchain.sdk.network
 import com.adchain.sdk.network.models.request.LoginRequest
 import com.adchain.sdk.network.models.request.TrackEventRequest
 import com.adchain.sdk.network.models.request.ValidateAppRequest
+import com.adchain.sdk.network.models.response.BannerInfoResponse
 import com.adchain.sdk.network.models.response.LoginResponse
 import com.adchain.sdk.network.models.response.ValidateAppResponse
-import com.adchain.sdk.banner.models.BannerResponse
 import com.adchain.sdk.quiz.models.QuizResponse
 import retrofit2.Response
 import retrofit2.http.Body
@@ -46,9 +46,9 @@ interface ApiService {
     
     // Banner endpoints
     @GET("v1/api/sdk/banner")
-    suspend fun getBanner(
+    suspend fun getBannerInfo(
         @Query("userId") userId: String,
         @Query("placementId") placementId: String,
         @Query("platform") platform: String
-    ): Response<BannerResponse>
+    ): Response<BannerInfoResponse>
 }

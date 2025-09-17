@@ -5,12 +5,15 @@ import android.content.Context
 import android.content.Intent
 import android.os.Handler
 import android.os.Looper
-import android.util.Log
 import com.adchain.sdk.network.ApiConfig
 import com.adchain.sdk.network.NetworkManager
 import com.adchain.sdk.network.models.response.AppData
+import com.adchain.sdk.network.models.response.BannerInfoResponse
 import com.adchain.sdk.offerwall.AdchainOfferwallActivity
 import com.adchain.sdk.offerwall.OfferwallCallback
+import com.adchain.sdk.utils.AdchainLogger
+import com.adchain.sdk.utils.DeviceUtils
+import com.adchain.sdk.utils.LogLevel
 import com.adchain.sdk.BuildConfig
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -55,7 +58,7 @@ object AdchainSdk {
     ) {
         // Check if already initialized and return early with log message
         if (isInitialized.get()) {
-            Log.w(TAG, "AdchainSdk is already initialized. Skipping re-initialization.")
+            AdchainLogger.w(TAG, "AdchainSdk is already initialized. Skipping re-initialization.")
             return
         }
 
@@ -68,6 +71,17 @@ object AdchainSdk {
         // Initialize network manager
         NetworkManager.initialize()
 
+        // Pre-fetch advertising ID in background to populate cache early
+        coroutineScope.launch(Dispatchers.IO) {
+            try {
+                AdchainLogger.d(TAG, "Starting GAID pre-fetch during SDK initialization")
+                val gaid = DeviceUtils.getAdvertisingId(application)
+                AdchainLogger.d(TAG, "GAID pre-fetch completed during init: ${gaid?.take(8) ?: "null or empty"}")
+            } catch (e: Exception) {
+                AdchainLogger.w(TAG, "GAID pre-fetch failed during init, will retry on login: ${e.message}")
+            }
+        }
+
         // Validate app credentials with server asynchronously
         coroutineScope.launch {
             val result = NetworkManager.validateApp()
@@ -78,10 +92,10 @@ object AdchainSdk {
                 // Mark as initialized immediately to allow SDK usage
                 isInitialized.set(true)
 
-                Log.d(TAG, "SDK validated successfully with server")
-                Log.d(TAG, "Offerwall URL: ${validatedAppData?.adchainHubUrl}")
+                AdchainLogger.i(TAG, "SDK validated successfully with server")
+                AdchainLogger.d(TAG, "Offerwall URL: ${validatedAppData?.adchainHubUrl}")
             } else {
-                Log.e(TAG, "SDK validation failed", result.exceptionOrNull())
+                AdchainLogger.e(TAG, "SDK validation failed", result.exceptionOrNull())
             }
         }
     }
@@ -133,14 +147,14 @@ object AdchainSdk {
                     )
                     
                     if (loginResponse.isSuccess) {
-                        Log.d(TAG, "Login successful: ${loginResponse.getOrNull()?.success}")
+                        AdchainLogger.i(TAG, "Login successful: ${loginResponse.getOrNull()?.success}")
                     } else {
-                        Log.e(TAG, "Login failed but continuing: ${loginResponse.exceptionOrNull()}")
+                        AdchainLogger.e(TAG, "Login failed but continuing: ${loginResponse.exceptionOrNull()}")
                     }
                 } catch (e: Exception) {
-                    Log.e(TAG, "Login failed but continuing", e)
+                    AdchainLogger.e(TAG, "Login failed but continuing", e)
                 }
-                
+
                 // Track session start event for DAU
                 NetworkManager.trackEvent(
                     userId = adchainSdkUser.userId,
@@ -152,7 +166,7 @@ object AdchainSdk {
                         "session_id" to java.util.UUID.randomUUID().toString()
                     )
                 )
-                
+
                 // Login successful
                 handler.post { listener?.onSuccess() }
             } catch (e: Exception) {
@@ -178,7 +192,7 @@ object AdchainSdk {
                         properties = mapOf("userId" to userToLogout.userId)
                     )
                 } catch (e: Exception) {
-                    android.util.Log.e("AdchainSdk", "Failed to track logout event", e)
+                    AdchainLogger.e("AdchainSdk", "Failed to track logout event", e)
                 }
             }
         }
@@ -187,17 +201,30 @@ object AdchainSdk {
     }
     
     @JvmStatic
+    fun isInitialized(): Boolean = isInitialized.get()
+
+    @JvmStatic
     val isLoggedIn: Boolean
         get() = currentUser != null
-    
+
     @JvmStatic
     fun getCurrentUser(): AdchainSdkUser? = currentUser
-    
+
     @JvmStatic
     fun getConfig(): AdchainSdkConfig? = config
-    
+
     @JvmStatic
     internal fun getApplication(): Application? = application
+
+    /**
+     * Set the log level for SDK logs
+     * @param level The desired log level (NONE, ERROR, WARNING, INFO, DEBUG, VERBOSE)
+     * Default is WARNING for production safety
+     */
+    @JvmStatic
+    fun setLogLevel(level: LogLevel) {
+        AdchainLogger.logLevel = level
+    }
     
     internal fun requireInitialized() {
         require(isInitialized.get()) { "AdchainSdk must be initialized before use" }
@@ -212,14 +239,14 @@ object AdchainSdk {
     fun openOfferwall(context: Context, callback: OfferwallCallback? = null) {
         // Check if SDK is initialized
         if (!isInitialized.get()) {
-            Log.e(TAG, "SDK not initialized")
+            AdchainLogger.e(TAG, "SDK not initialized")
             callback?.onError("SDK not initialized. Please initialize the SDK first.")
             return
         }
         
         // Check if user is logged in
         if (currentUser == null) {
-            Log.e(TAG, "User not logged in")
+            AdchainLogger.e(TAG, "User not logged in")
             callback?.onError("User not logged in. Please login first.")
             return
         }
@@ -227,7 +254,7 @@ object AdchainSdk {
         // Check if offerwall URL is available
         val offerwallUrl = validatedAppData?.adchainHubUrl
         if (offerwallUrl.isNullOrEmpty()) {
-            Log.e(TAG, "Offerwall URL not available")
+            AdchainLogger.e(TAG, "Offerwall URL not available")
             callback?.onError("Offerwall URL not available. Please check your app configuration.")
             return
         }
@@ -261,7 +288,58 @@ object AdchainSdk {
             )
         }
     }
-    
+
+    /**
+     * Get banner information for a specific placement
+     * @param placementId The placement identifier for the banner
+     * @param callback Callback to receive the banner information
+     */
+    @JvmStatic
+    fun getBannerInfo(
+        placementId: String,
+        callback: (Result<BannerInfoResponse>) -> Unit
+    ) {
+        // Check if SDK is initialized
+        if (!isInitialized.get()) {
+            AdchainLogger.e(TAG, "SDK not initialized")
+            callback(Result.failure(Exception("SDK not initialized. Please initialize the SDK first.")))
+            return
+        }
+
+        // Check if user is logged in
+        val user = currentUser
+        if (user == null) {
+            AdchainLogger.e(TAG, "User not logged in")
+            callback(Result.failure(Exception("User not logged in. Please login first.")))
+            return
+        }
+
+        // Check if placementId is valid
+        if (placementId.isEmpty()) {
+            AdchainLogger.e(TAG, "PlacementId is empty")
+            callback(Result.failure(Exception("PlacementId cannot be empty")))
+            return
+        }
+
+        // Make network request
+        coroutineScope.launch {
+            try {
+                val result = NetworkManager.getBannerInfo(
+                    userId = user.userId,
+                    placementId = placementId
+                )
+                handler.post {
+                    callback(result)
+                }
+            } catch (e: Exception) {
+                AdchainLogger.e(TAG, "Failed to get banner info", e)
+                handler.post {
+                    callback(Result.failure(e))
+                }
+            }
+        }
+    }
+
     @JvmStatic
     internal fun resetForTesting() {
         isInitialized.set(false)

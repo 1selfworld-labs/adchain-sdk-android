@@ -1,8 +1,8 @@
 package com.adchain.sdk.mission
 
 import android.content.Intent
-import android.util.Log
 import com.adchain.sdk.BuildConfig
+import com.adchain.sdk.utils.AdchainLogger
 import com.adchain.sdk.core.AdchainSdk
 import com.adchain.sdk.common.AdchainAdError
 import com.adchain.sdk.network.ApiClient
@@ -51,7 +51,7 @@ class AdchainMission(private val unitId: String) {
         onFailure: (AdchainAdError) -> Unit,
         shouldStoreCallbacks: Boolean = true
     ) {
-        Log.d(TAG, "Loading missions for unit: $unitId")
+        AdchainLogger.d(TAG, "Loading missions for unit: $unitId")
         
         // Store callbacks for refresh (only if requested)
         if (shouldStoreCallbacks) {
@@ -60,7 +60,7 @@ class AdchainMission(private val unitId: String) {
         }
         
         if (!AdchainSdk.isLoggedIn) {
-            Log.e(TAG, "SDK not initialized or user not logged in")
+            AdchainLogger.e(TAG, "SDK not initialized or user not logged in")
             onFailure(AdchainAdError.NOT_INITIALIZED)
             return
         }
@@ -98,7 +98,7 @@ class AdchainMission(private val unitId: String) {
                         
                         missions = missionsToShow
                         
-                        Log.d(TAG, "Loaded ${missions.size} missions, progress: ${missionResp.current}/${missionResp.total}, reward_url: ${rewardUrl}")
+                        AdchainLogger.i(TAG, "Loaded ${missions.size} missions, progress: ${missionResp.current}/${missionResp.total}, reward_url: ${rewardUrl}")
                         
                         // Track impression for all missions
                         missions.forEach { mission ->
@@ -107,15 +107,15 @@ class AdchainMission(private val unitId: String) {
                         
                         onSuccess(missions)
                     } ?: run {
-                        Log.e(TAG, "Empty response body")
+                        AdchainLogger.e(TAG, "Empty response body")
                         onFailure(AdchainAdError.EMPTY_RESPONSE)
                     }
                 } else {
-                    Log.e(TAG, "Failed to load missions: ${response.code()}")
+                    AdchainLogger.e(TAG, "Failed to load missions: ${response.code()}")
                     onFailure(AdchainAdError.NETWORK_ERROR)
                 }
             } catch (e: Exception) {
-                Log.e(TAG, "Error loading missions", e)
+                AdchainLogger.e(TAG, "Error loading missions", e)
                 onFailure(AdchainAdError.UNKNOWN)
             }
         }
@@ -151,7 +151,7 @@ class AdchainMission(private val unitId: String) {
     fun clickMission(missionId: String) {
         val mission = missions.find { it.id == missionId }
         if (mission == null) {
-            Log.e(TAG, "Mission not found: $missionId")
+            AdchainLogger.e(TAG, "Mission not found: $missionId")
             return
         }
         
@@ -167,12 +167,12 @@ class AdchainMission(private val unitId: String) {
      * Opens reward WebView
      */
     fun clickGetReward() {
-        Log.d(TAG, "Get reward clicked")
+        AdchainLogger.d(TAG, "Get reward clicked")
         openRewardWebView()
     }
     
     private fun onMissionClicked(mission: Mission) {
-        Log.d(TAG, "Mission clicked: ${mission.id}")
+        AdchainLogger.d(TAG, "Mission clicked: ${mission.id}")
         
         coroutineScope.launch {
             val userId = AdchainSdk.getCurrentUser()?.userId ?: ""
@@ -190,7 +190,7 @@ class AdchainMission(private val unitId: String) {
     }
     
     private fun onMissionImpressed(mission: Mission) {
-        Log.d(TAG, "Mission impressed: ${mission.id}")
+        AdchainLogger.d(TAG, "Mission impressed: ${mission.id}")
         
         coroutineScope.launch {
             val userId = AdchainSdk.getCurrentUser()?.userId ?: ""
@@ -213,31 +213,31 @@ class AdchainMission(private val unitId: String) {
     private fun openRewardWebView() {
         val context = AdchainSdk.getApplication()
         if (context == null) {
-            Log.e(TAG, "Application context not available")
+            AdchainLogger.e(TAG, "Application context not available")
             return
         }
         
         if (rewardUrl.isNullOrEmpty()) {
-            Log.e(TAG, "No reward URL available")
+            AdchainLogger.e(TAG, "No reward URL available")
             return
         }
         
         // Setup reward callback
         val rewardCallback = object : OfferwallCallback {
             override fun onOpened() {
-                Log.d(TAG, "Reward WebView opened")
+                AdchainLogger.d(TAG, "Reward WebView opened")
             }
             
             override fun onClosed() {
-                Log.d(TAG, "Reward WebView closed")
+                AdchainLogger.d(TAG, "Reward WebView closed")
             }
             
             override fun onError(message: String) {
-                Log.e(TAG, "Reward WebView error: $message")
+                AdchainLogger.e(TAG, "Reward WebView error: $message")
             }
             
             override fun onRewardEarned(amount: Int) {
-                Log.d(TAG, "Reward earned: $amount")
+                AdchainLogger.d(TAG, "Reward earned: $amount")
             }
         }
         
@@ -255,7 +255,7 @@ class AdchainMission(private val unitId: String) {
         // Start activity
         context.startActivity(intent)
         
-        Log.d(TAG, "Opening reward WebView with URL: $rewardUrl")
+        AdchainLogger.d(TAG, "Opening reward WebView with URL: $rewardUrl")
     }
     
     /**
@@ -264,7 +264,7 @@ class AdchainMission(private val unitId: String) {
     private fun openMissionWebView(mission: Mission) {
         val context = AdchainSdk.getApplication()
         if (context == null) {
-            Log.e(TAG, "Application context not available")
+            AdchainLogger.e(TAG, "Application context not available")
             return
         }
         
@@ -275,21 +275,21 @@ class AdchainMission(private val unitId: String) {
         // Setup mission callback
         val missionCallback = object : OfferwallCallback {
             override fun onOpened() {
-                Log.d(TAG, "Mission WebView opened")
+                AdchainLogger.d(TAG, "Mission WebView opened")
             }
             
             override fun onClosed() {
-                Log.d(TAG, "Mission WebView closed")
+                AdchainLogger.d(TAG, "Mission WebView closed")
                 // instance는 null로 만들지 않음 - 메모리 사용량이 크지 않음
             }
             
             override fun onError(message: String) {
-                Log.e(TAG, "Mission WebView error: $message")
+                AdchainLogger.e(TAG, "Mission WebView error: $message")
                 // 에러 발생 시에도 유지 (필요시 재사용 가능)
             }
             
             override fun onRewardEarned(amount: Int) {
-                Log.d(TAG, "Mission reward earned: $amount")
+                AdchainLogger.d(TAG, "Mission reward earned: $amount")
             }
         }
         
@@ -308,7 +308,7 @@ class AdchainMission(private val unitId: String) {
         context.startActivity(intent)
         
         // Track mission open
-        Log.d(TAG, "Opening mission WebView for mission: ${mission.id}")
+        AdchainLogger.d(TAG, "Opening mission WebView for mission: ${mission.id}")
     }
     
     /**
@@ -316,7 +316,7 @@ class AdchainMission(private val unitId: String) {
      * iOS와 동일한 방식
      */
     internal fun onMissionCompleted(mission: Mission) {
-        Log.d(TAG, "Mission completed: ${mission.id}")
+        AdchainLogger.i(TAG, "Mission completed: ${mission.id}")
 
         // Notify listener
         eventsListener?.onCompleted(mission)
@@ -344,7 +344,7 @@ class AdchainMission(private val unitId: String) {
      * iOS와 동일한 방식
      */
     internal fun onMissionProgressed(mission: Mission) {
-        Log.d(TAG, "Mission progressed: ${mission.id}")
+        AdchainLogger.d(TAG, "Mission progressed: ${mission.id}")
 
         // Notify listener
         eventsListener?.onProgressed(mission)
@@ -371,7 +371,7 @@ class AdchainMission(private val unitId: String) {
      * Called from OfferwallActivity when mission is completed
      */
     internal fun refreshAfterCompletion() {
-        Log.d(TAG, "Refreshing mission list after completion")
+        AdchainLogger.d(TAG, "Refreshing mission list after completion")
         
         // Store current callbacks if they exist
         val savedOnSuccess = lastOnSuccess
@@ -381,7 +381,7 @@ class AdchainMission(private val unitId: String) {
         if (savedOnSuccess != null && savedOnFailure != null) {
             getMissionList(savedOnSuccess, savedOnFailure, shouldStoreCallbacks = false)
         } else {
-            Log.w(TAG, "No callbacks stored for refresh, skipping UI update")
+            AdchainLogger.d(TAG, "No callbacks stored for refresh, skipping UI update")
         }
         
         // instance는 유지 - 다음 사용을 위해

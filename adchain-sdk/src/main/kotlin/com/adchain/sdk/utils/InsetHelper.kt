@@ -2,7 +2,6 @@ package com.adchain.sdk.utils
 
 import android.content.Context
 import android.os.Build
-import android.util.Log
 import android.view.View
 import android.view.ViewGroup
 import androidx.core.view.ViewCompat
@@ -27,8 +26,8 @@ object InsetHelper {
      * @param target The view to apply insets to (typically WebView)
      */
     fun applyBottomInsetWithFallback(target: View) {
-        Log.d(TAG, "=== Starting InsetHelper for view: ${target.javaClass.simpleName} ===")
-        Log.d(TAG, "Build.VERSION.SDK_INT: ${Build.VERSION.SDK_INT}")
+        AdchainLogger.v(TAG, "=== Starting InsetHelper for view: ${target.javaClass.simpleName} ===")
+        AdchainLogger.v(TAG, "Build.VERSION.SDK_INT: ${Build.VERSION.SDK_INT}")
 
         var applied = false
 
@@ -38,14 +37,14 @@ object InsetHelper {
             val imeInsets = windowInsets.getInsets(WindowInsetsCompat.Type.ime())
             val bottomInset = maxOf(systemBarsInsets.bottom, imeInsets.bottom)
 
-            Log.d(TAG, "Stage 1 - Insets listener called")
-            Log.d(TAG, "  - systemBars: bottom=${systemBarsInsets.bottom}, top=${systemBarsInsets.top}")
-            Log.d(TAG, "  - ime: bottom=${imeInsets.bottom}")
-            Log.d(TAG, "  - final bottom=$bottomInset")
+            AdchainLogger.v(TAG, "Stage 1 - Insets listener called")
+            AdchainLogger.v(TAG, "  - systemBars: bottom=${systemBarsInsets.bottom}, top=${systemBarsInsets.top}")
+            AdchainLogger.v(TAG, "  - ime: bottom=${imeInsets.bottom}")
+            AdchainLogger.v(TAG, "  - final bottom=$bottomInset")
 
             if (bottomInset > 0) {
                 applied = true
-                Log.d(TAG, "Stage 1 - Applying padding: $bottomInset")
+                AdchainLogger.v(TAG, "Stage 1 - Applying padding: $bottomInset")
                 view.setPadding(
                     view.paddingLeft,
                     view.paddingTop,
@@ -53,7 +52,7 @@ object InsetHelper {
                     bottomInset
                 )
             } else {
-                Log.d(TAG, "Stage 1 - No insets to apply (bottom=0)")
+                AdchainLogger.v(TAG, "Stage 1 - No insets to apply (bottom=0)")
             }
 
             // Return the insets without consuming them
@@ -65,15 +64,15 @@ object InsetHelper {
 
         // Stage 2 & 3: Fallback strategies (executed after view is laid out)
         target.post {
-            Log.d(TAG, "Post block executed - applied=$applied")
+            AdchainLogger.v(TAG, "Post block executed - applied=$applied")
             if (!applied) {
                 applyFallbackInsets(target)
             } else {
-                Log.d(TAG, "Insets already applied via listener, skipping fallback")
+                AdchainLogger.v(TAG, "Insets already applied via listener, skipping fallback")
             }
 
             // Final padding check
-            Log.d(TAG, "=== Final padding: left=${target.paddingLeft}, top=${target.paddingTop}, right=${target.paddingRight}, bottom=${target.paddingBottom} ===")
+            AdchainLogger.v(TAG, "=== Final padding: left=${target.paddingLeft}, top=${target.paddingTop}, right=${target.paddingRight}, bottom=${target.paddingBottom} ===")
         }
     }
 
@@ -81,7 +80,7 @@ object InsetHelper {
      * Apply fallback insets when standard listener doesn't work
      */
     private fun applyFallbackInsets(target: View) {
-        Log.d(TAG, "Starting fallback insets...")
+        AdchainLogger.v(TAG, "Starting fallback insets...")
 
         // Stage 2: Get root window insets ignoring visibility
         val rootInsets = ViewCompat.getRootWindowInsets(target)
@@ -90,12 +89,12 @@ object InsetHelper {
                 WindowInsetsCompat.Type.systemBars() or WindowInsetsCompat.Type.ime()
             )
 
-            Log.d(TAG, "Stage 2 - Root insets found")
-            Log.d(TAG, "  - bottom=${allInsets.bottom}, top=${allInsets.top}")
-            Log.d(TAG, "  - left=${allInsets.left}, right=${allInsets.right}")
+            AdchainLogger.v(TAG, "Stage 2 - Root insets found")
+            AdchainLogger.v(TAG, "  - bottom=${allInsets.bottom}, top=${allInsets.top}")
+            AdchainLogger.v(TAG, "  - left=${allInsets.left}, right=${allInsets.right}")
 
             if (allInsets.bottom > 0) {
-                Log.d(TAG, "Stage 2 - Applying root insets padding: ${allInsets.bottom}")
+                AdchainLogger.v(TAG, "Stage 2 - Applying root insets padding: ${allInsets.bottom}")
                 target.setPadding(
                     target.paddingLeft,
                     target.paddingTop,
@@ -104,18 +103,18 @@ object InsetHelper {
                 )
                 return
             } else {
-                Log.d(TAG, "Stage 2 - Root insets bottom is 0, trying Stage 3")
+                AdchainLogger.v(TAG, "Stage 2 - Root insets bottom is 0, trying Stage 3")
             }
         } else {
-            Log.d(TAG, "Stage 2 - Root insets is null")
+            AdchainLogger.v(TAG, "Stage 2 - Root insets is null")
         }
 
         // Stage 3: Resource-based navigation bar height fallback
         val navBarHeight = getNavigationBarHeight(target.context)
-        Log.d(TAG, "Stage 3 - Resource fallback: navBarHeight=$navBarHeight")
+        AdchainLogger.v(TAG, "Stage 3 - Resource fallback: navBarHeight=$navBarHeight")
 
         if (navBarHeight > 0) {
-            Log.d(TAG, "Stage 3 - Applying resource-based padding: $navBarHeight")
+            AdchainLogger.v(TAG, "Stage 3 - Applying resource-based padding: $navBarHeight")
             target.setPadding(
                 target.paddingLeft,
                 target.paddingTop,
@@ -123,7 +122,7 @@ object InsetHelper {
                 navBarHeight
             )
         } else {
-            Log.w(TAG, "Stage 3 - No navigation bar height found! Content may be hidden.")
+            AdchainLogger.v(TAG, "Stage 3 - No navigation bar height found! Content may be hidden.")
         }
     }
 

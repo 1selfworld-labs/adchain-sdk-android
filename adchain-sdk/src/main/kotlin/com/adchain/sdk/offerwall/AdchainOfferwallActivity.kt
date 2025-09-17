@@ -8,7 +8,7 @@ import android.content.Intent
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
-import android.util.Log
+import com.adchain.sdk.utils.AdchainLogger
 import android.view.ViewGroup
 import android.webkit.*
 import android.widget.FrameLayout
@@ -87,10 +87,10 @@ internal class AdchainOfferwallActivity : AppCompatActivity() {
         // Enable Edge-to-Edge for Android 30+ to properly handle window insets
         // This is required for proper inset handling
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-            Log.d(TAG, "Setting Edge-to-Edge: setDecorFitsSystemWindows(false)")
+            AdchainLogger.d(TAG, "Setting Edge-to-Edge: setDecorFitsSystemWindows(false)")
             WindowCompat.setDecorFitsSystemWindows(window, false)
         } else {
-            Log.d(TAG, "SDK < 30, not setting Edge-to-Edge")
+            AdchainLogger.d(TAG, "SDK < 30, not setting Edge-to-Edge")
         }
 
         // Check if this is a sub WebView
@@ -136,7 +136,7 @@ internal class AdchainOfferwallActivity : AppCompatActivity() {
         ViewCompat.setOnApplyWindowInsetsListener(container) { v, windowInsets ->
             val insets = windowInsets.getInsets(WindowInsetsCompat.Type.systemBars())
 
-            Log.d(TAG, "Applying container padding - bottom: ${insets.bottom}, top: ${insets.top}")
+            AdchainLogger.v(TAG, "Applying container padding - bottom: ${insets.bottom}, top: ${insets.top}")
 
             // Apply padding to the container using system-provided values
             v.setPadding(0, insets.top, 0, insets.bottom)
@@ -152,20 +152,20 @@ internal class AdchainOfferwallActivity : AppCompatActivity() {
                 val insets = rootInsets.getInsets(WindowInsetsCompat.Type.systemBars())
 
                 if (container.paddingBottom == 0 && insets.bottom > 0) {
-                    Log.d(TAG, "Fallback: Applying container padding - bottom: ${insets.bottom}, top: ${insets.top}")
+                    AdchainLogger.v(TAG, "Fallback: Applying container padding - bottom: ${insets.bottom}, top: ${insets.top}")
                     container.setPadding(0, insets.top, 0, insets.bottom)
                 }
             }
         }
 
         // Additional debugging
-        Log.d(TAG, "Window flags: ${window.attributes.flags}")
-        Log.d(TAG, "Window softInputMode: ${window.attributes.softInputMode}")
+        AdchainLogger.v(TAG, "Window flags: ${window.attributes.flags}")
+        AdchainLogger.v(TAG, "Window softInputMode: ${window.attributes.softInputMode}")
         
         // Get base URL from intent
         val baseUrl = intent.getStringExtra(EXTRA_BASE_URL)
         if (baseUrl.isNullOrEmpty()) {
-            Log.e(TAG, "No base URL provided")
+            AdchainLogger.e(TAG, "No base URL provided")
             if (!isSubWebView) {
                 callback?.onError("Failed to load offerwall: No URL provided")
             }
@@ -187,7 +187,7 @@ internal class AdchainOfferwallActivity : AppCompatActivity() {
             // Main WebView - build with parameters
             buildOfferwallUrl(baseUrl)
         }
-        Log.d(TAG, "Loading ${if (isSubWebView) "sub " else ""}offerwall URL: $finalUrl")
+        AdchainLogger.d(TAG, "Loading ${if (isSubWebView) "sub " else ""}offerwall URL: $finalUrl")
         webView.loadUrl(finalUrl)
     }
     
@@ -227,7 +227,7 @@ internal class AdchainOfferwallActivity : AppCompatActivity() {
                 message: String?,
                 result: JsResult?
             ): Boolean {
-                Log.d(TAG, "JS Alert: $message")
+                AdchainLogger.d(TAG, "JS Alert: $message")
                 return super.onJsAlert(view, url, message, result)
             }
         }
@@ -290,7 +290,7 @@ internal class AdchainOfferwallActivity : AppCompatActivity() {
                     )
                 }
             } catch (e: Exception) {
-                Log.w(TAG, "Failed to inject advertising ID via JavaScript", e)
+                AdchainLogger.d(TAG, "Failed to inject advertising ID via JavaScript: ${e.message}")
             }
         }
         
@@ -298,7 +298,7 @@ internal class AdchainOfferwallActivity : AppCompatActivity() {
     }
     
     private fun closeOfferwall() {
-        Log.d(TAG, "Closing offerwall")
+        AdchainLogger.i(TAG, "Closing offerwall")
         
         // If this is a sub WebView, just close this one
         if (isSubWebView) {
@@ -371,7 +371,7 @@ internal class AdchainOfferwallActivity : AppCompatActivity() {
     inner class NativeBridge {
         @JavascriptInterface
         fun postMessage(jsonMessage: String) {
-            Log.d(TAG, "Received webkit message: $jsonMessage")
+            AdchainLogger.d(TAG, "Received webkit message: $jsonMessage")
             handlePostMessage(jsonMessage)
         }
     }
@@ -383,7 +383,7 @@ internal class AdchainOfferwallActivity : AppCompatActivity() {
         webView.webViewClient = object : WebViewClient() {
             override fun onPageFinished(view: WebView?, url: String?) {
                 super.onPageFinished(view, url)
-                Log.d(TAG, "Page loaded: $url, injecting webkit wrapper")
+                AdchainLogger.d(TAG, "Page loaded: $url, injecting webkit wrapper")
                 injectWebkitWrapper()
             }
             
@@ -414,7 +414,7 @@ internal class AdchainOfferwallActivity : AppCompatActivity() {
                 } else {
                     "WebView error occurred"
                 }
-                Log.e(TAG, "WebView error: $errorDescription")
+                AdchainLogger.e(TAG, "WebView error: $errorDescription")
                 runOnUiThread {
                     callback?.onError("Failed to load offerwall: $errorDescription")
                 }
@@ -464,7 +464,7 @@ internal class AdchainOfferwallActivity : AppCompatActivity() {
             val type = message.getString("type")
             val data = message.optJSONObject("data")
             
-            Log.d(TAG, "Processing message type: $type")
+            AdchainLogger.d(TAG, "Processing message type: $type")
             
             when (type) {
                 "openWebView" -> handleOpenWebView(data)
@@ -477,10 +477,10 @@ internal class AdchainOfferwallActivity : AppCompatActivity() {
                 "missionCompleted" -> handleMissionCompleted(data)
                 "missionProgressed" -> handleMissionProgressed(data)
                 "getUserInfo" -> handleGetUserInfo()
-                else -> Log.w(TAG, "Unknown message type: $type")
+                else -> AdchainLogger.d(TAG, "Unknown message type: $type")
             }
         } catch (e: Exception) {
-            Log.e(TAG, "Failed to parse JS message", e)
+            AdchainLogger.e(TAG, "Failed to parse JS message", e)
         }
     }
     
@@ -488,11 +488,11 @@ internal class AdchainOfferwallActivity : AppCompatActivity() {
     private fun handleOpenWebView(data: JSONObject?) {
         val url = data?.optString("url")
         if (url.isNullOrEmpty()) {
-            Log.e(TAG, "openWebView: No URL provided")
+            AdchainLogger.e(TAG, "openWebView: No URL provided")
             return
         }
         
-        Log.d(TAG, "Opening sub WebView: $url")
+        AdchainLogger.d(TAG, "Opening sub WebView: $url")
         
         // Ensure UI operations run on UI thread
         runOnUiThread {
@@ -513,7 +513,7 @@ internal class AdchainOfferwallActivity : AppCompatActivity() {
     }
     
     private fun handleClose() {
-        Log.d(TAG, "Handling close message")
+        AdchainLogger.d(TAG, "Handling close message")
         
         runOnUiThread {
             // Close all WebViews
@@ -530,10 +530,10 @@ internal class AdchainOfferwallActivity : AppCompatActivity() {
     
     private fun handleCloseOpenWebView(data: JSONObject?) {
         val url = data?.optString("url")
-        Log.d(TAG, "Handling closeOpenWebView message - isSubWebView: $isSubWebView, url: $url")
+        AdchainLogger.d(TAG, "Handling closeOpenWebView message - isSubWebView: $isSubWebView, url: $url")
         
         if (url.isNullOrEmpty()) {
-            Log.e(TAG, "closeOpenWebView: No URL provided")
+            AdchainLogger.e(TAG, "closeOpenWebView: No URL provided")
             return
         }
         
@@ -583,11 +583,11 @@ internal class AdchainOfferwallActivity : AppCompatActivity() {
     private fun handleExternalOpenBrowser(data: JSONObject?) {
         val url = data?.optString("url")
         if (url.isNullOrEmpty()) {
-            Log.e(TAG, "externalOpenBrowser: No URL provided")
+            AdchainLogger.e(TAG, "externalOpenBrowser: No URL provided")
             return
         }
         
-        Log.d(TAG, "Opening external browser: $url")
+        AdchainLogger.d(TAG, "Opening external browser: $url")
         
         runOnUiThread {
             try {
@@ -606,10 +606,10 @@ internal class AdchainOfferwallActivity : AppCompatActivity() {
                     )
                 }
             } catch (e: ActivityNotFoundException) {
-                Log.e(TAG, "No browser found to open URL: $url", e)
+                AdchainLogger.e(TAG, "No browser found to open URL: $url", e)
                 Toast.makeText(this@AdchainOfferwallActivity, "No browser app found", Toast.LENGTH_SHORT).show()
             } catch (e: Exception) {
-                Log.e(TAG, "Failed to open external browser", e)
+                AdchainLogger.e(TAG, "Failed to open external browser", e)
                 Toast.makeText(this@AdchainOfferwallActivity, "Failed to open browser", Toast.LENGTH_SHORT).show()
             }
         }
@@ -617,7 +617,7 @@ internal class AdchainOfferwallActivity : AppCompatActivity() {
     
     // Quiz-specific message handlers
     private fun handleQuizCompleted(data: JSONObject?) {
-        Log.d(TAG, "Quiz completed")
+        AdchainLogger.i(TAG, "Quiz completed")
         
         runOnUiThread {
             // Track quiz completion
@@ -657,7 +657,7 @@ internal class AdchainOfferwallActivity : AppCompatActivity() {
     }
     
     private fun handleMissionCompleted(data: JSONObject?) {
-        Log.d(TAG, "Mission completed")
+        AdchainLogger.i(TAG, "Mission completed")
 
         val missionId = data?.optString("missionId") ?: ""
 
@@ -697,7 +697,7 @@ internal class AdchainOfferwallActivity : AppCompatActivity() {
     }
 
     private fun handleMissionProgressed(data: JSONObject?) {
-        Log.d(TAG, "Mission progressed")
+        AdchainLogger.i(TAG, "Mission progressed")
 
         val missionId = data?.optString("missionId") ?: ""
 
@@ -721,11 +721,11 @@ internal class AdchainOfferwallActivity : AppCompatActivity() {
                 val mission = AdchainMission.currentMission
 
                 if (missionInstance != null && mission != null) {
-                    Log.d(TAG, "🔄 [Android SDK - WebView] Mission 진행 알림...")
+                    AdchainLogger.d(TAG, "🔄 [Android SDK - WebView] Mission 진행 알림...")
                     missionInstance.onMissionProgressed(mission)
-                    Log.d(TAG, "✅ [Android SDK - WebView] Mission 진행 알림 완료!")
+                    AdchainLogger.d(TAG, "✅ [Android SDK - WebView] Mission 진행 알림 완료!")
                 } else {
-                    Log.w(TAG, "⚠️ [Android SDK - WebView] Mission instance 또는 mission을 찾을 수 없음")
+                    AdchainLogger.d(TAG, "⚠️ [Android SDK - WebView] Mission instance 또는 mission을 찾을 수 없음")
                 }
 
                 // DO NOT call onClosed() here
