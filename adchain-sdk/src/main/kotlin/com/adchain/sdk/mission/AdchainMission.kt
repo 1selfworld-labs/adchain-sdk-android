@@ -25,6 +25,9 @@ class AdchainMission(private val unitId: String) {
     private var missionResponse: MissionResponse? = null
     private var rewardUrl: String? = null
     private var missionProgress: MissionProgress? = null
+
+    // Public getter for React Native Bridge
+    fun getMissionResponse(): MissionResponse? = missionResponse
     private val coroutineScope = CoroutineScope(Dispatchers.Main + SupervisorJob())
     private val apiService: ApiService by lazy {
         ApiClient.createService(ApiService::class.java)

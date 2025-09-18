@@ -16,5 +16,17 @@ data class MissionResponse(
     @Json(name = "rewardUrl")  // snake_case에서 camelCase로 변경
     val rewardUrl: String? = null,
     @Json(name = "message")
-    val message: String? = null
+    val message: String? = null,
+
+    // 신규 추가 필드
+    @Json(name = "titleText")
+    val titleText: String? = null,
+    @Json(name = "descriptionText")
+    val descriptionText: String? = null,
+    @Json(name = "bottomText")
+    val bottomText: String? = null,
+    @Json(name = "rewardIconUrl")
+    val rewardIconUrl: String? = null,
+    @Json(name = "bottomIconUrl")
+    val bottomIconUrl: String? = null
 )

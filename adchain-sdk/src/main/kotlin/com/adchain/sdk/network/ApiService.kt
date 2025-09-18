@@ -29,7 +29,7 @@ interface ApiService {
     ): Response<Unit>
     
     // Mission endpoints
-    @GET("v1/api/mission")
+    @GET("v1/api/sdk/mission")
     suspend fun getMissions(
         @Query("userId") userId: String? = null,
         @Query("platform") platform: String? = null,
@@ -37,7 +37,7 @@ interface ApiService {
     ): Response<com.adchain.sdk.mission.MissionResponse>
     
     // Quiz endpoints
-    @GET("v1/api/quiz")
+    @GET("v1/api/sdk/quiz")
     suspend fun getQuizEvents(
         @Query("userId") userId: String? = null,
         @Query("platform") platform: String? = null,

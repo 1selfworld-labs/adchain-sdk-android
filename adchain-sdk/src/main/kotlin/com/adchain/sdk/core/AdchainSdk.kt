@@ -290,6 +290,117 @@ object AdchainSdk {
     }
 
     /**
+     * Opens the offerwall with a custom URL
+     * @param url The custom URL to open in the offerwall WebView
+     * @param context The context to start the activity from
+     * @param callback Optional callback for offerwall events
+     */
+    @JvmStatic
+    @JvmOverloads
+    fun openOfferwallWithUrl(
+        url: String,
+        context: Context,
+        callback: OfferwallCallback? = null
+    ) {
+        // Check if SDK is initialized
+        if (!isInitialized.get()) {
+            AdchainLogger.e(TAG, "SDK not initialized")
+            callback?.onError("SDK not initialized. Please initialize the SDK first.")
+            return
+        }
+
+        // Check if user is logged in
+        if (currentUser == null) {
+            AdchainLogger.e(TAG, "User not logged in")
+            callback?.onError("User not logged in. Please login first.")
+            return
+        }
+
+        // Validate URL
+        if (url.isEmpty()) {
+            AdchainLogger.e(TAG, "URL is empty")
+            callback?.onError("URL cannot be empty")
+            return
+        }
+
+        // Store callback in companion object to be accessed by activity
+        AdchainOfferwallActivity.setCallback(callback)
+
+        // Start offerwall activity with custom URL
+        val intent = Intent(context, AdchainOfferwallActivity::class.java).apply {
+            putExtra(AdchainOfferwallActivity.EXTRA_BASE_URL, url)
+            putExtra(AdchainOfferwallActivity.EXTRA_USER_ID, currentUser?.userId)
+            putExtra(AdchainOfferwallActivity.EXTRA_APP_ID, config?.appKey)
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        }
+
+        context.startActivity(intent)
+
+        // Notify callback that offerwall is opened
+        callback?.onOpened()
+
+        // Track event
+        coroutineScope.launch {
+            NetworkManager.trackEvent(
+                userId = currentUser?.userId ?: "",
+                eventName = "custom_offerwall_opened",
+                sdkVersion = BuildConfig.VERSION_NAME,
+                category = "offerwall",
+                properties = mapOf(
+                    "source" to "sdk_api",
+                    "url" to url
+                )
+            )
+        }
+    }
+
+    /**
+     * Opens a URL in the system's default external browser
+     * @param url The URL to open in the external browser
+     * @param context The context to start the browser from
+     * @return true if browser was opened successfully, false otherwise
+     */
+    @JvmStatic
+    fun openExternalBrowser(url: String, context: Context): Boolean {
+        // Validate URL
+        if (url.isEmpty()) {
+            AdchainLogger.e(TAG, "URL is empty")
+            return false
+        }
+
+        return try {
+            val browserIntent = Intent(Intent.ACTION_VIEW, android.net.Uri.parse(url)).apply {
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            }
+            context.startActivity(browserIntent)
+
+            // Track event if user is logged in
+            currentUser?.let { user ->
+                coroutineScope.launch {
+                    NetworkManager.trackEvent(
+                        userId = user.userId,
+                        eventName = "external_browser_opened",
+                        sdkVersion = BuildConfig.VERSION_NAME,
+                        category = "browser",
+                        properties = mapOf(
+                            "source" to "sdk_api",
+                            "url" to url
+                        )
+                    )
+                }
+            }
+
+            true
+        } catch (e: android.content.ActivityNotFoundException) {
+            AdchainLogger.e(TAG, "No browser app found to open URL: $url", e)
+            false
+        } catch (e: Exception) {
+            AdchainLogger.e(TAG, "Failed to open external browser", e)
+            false
+        }
+    }
+
+    /**
      * Get banner information for a specific placement
      * @param placementId The placement identifier for the banner
      * @param callback Callback to receive the banner information

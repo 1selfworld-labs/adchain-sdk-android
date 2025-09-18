@@ -11,6 +11,12 @@ data class BannerInfoResponse(
     @Json(name = "imageUrl")
     val imageUrl: String? = null,
 
+    @Json(name = "imageWidth")
+    val imageWidth: Int? = null,
+
+    @Json(name = "imageHeight")
+    val imageHeight: Int? = null,
+
     @Json(name = "titleText")
     val titleText: String? = null,
 

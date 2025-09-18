@@ -11,6 +11,7 @@ import com.adchain.sdk.network.NetworkManager
 import com.adchain.sdk.offerwall.AdchainOfferwallActivity
 import com.adchain.sdk.offerwall.OfferwallCallback
 import com.adchain.sdk.quiz.models.QuizEvent
+import com.adchain.sdk.quiz.models.QuizResponse
 import com.adchain.sdk.utils.DeviceUtils
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -28,7 +29,7 @@ class AdchainQuiz(private val unitId: String) {
     }
     
     private var quizEvents: List<QuizEvent> = emptyList()
-    private var lastOnSuccess: ((List<QuizEvent>) -> Unit)? = null
+    private var lastOnSuccess: ((QuizResponse) -> Unit)? = null
     private var lastOnFailure: ((AdchainAdError) -> Unit)? = null
     private val coroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
     private val apiService: ApiService by lazy {
@@ -48,7 +49,7 @@ class AdchainQuiz(private val unitId: String) {
      */
     @JvmOverloads
     fun getQuizList(
-        onSuccess: (List<QuizEvent>) -> Unit,
+        onSuccess: (QuizResponse) -> Unit,
         onFailure: (AdchainAdError) -> Unit,
         shouldStoreCallbacks: Boolean = true
     ) {
@@ -88,13 +89,14 @@ class AdchainQuiz(private val unitId: String) {
                     response.body()?.let { quizResponse ->
                         quizEvents = quizResponse.events
                         AdchainLogger.i(TAG, "Loaded ${quizEvents.size} quiz events")
-                        
+
                         // Track impression for all quizzes
                         quizEvents.forEach { quiz ->
                             trackImpression(quiz)
                         }
-                        
-                        onSuccess(quizEvents)
+
+                        // 전체 응답 반환 (events 뿐만 아니라 titleText 등도 포함)
+                        onSuccess(quizResponse)
                     } ?: run {
                         AdchainLogger.e(TAG, "Empty response body")
                         onFailure(AdchainAdError.EMPTY_RESPONSE)

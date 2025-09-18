@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>연결 오류</title>
+    <link rel="stylesheet" href="css/offline.css">
+</head>
+<body>
+    <div class="offline-container">
+        <div class="offline-icon">
+            <svg width="80" height="80" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path d="M1 1l22 22" stroke="#999" stroke-width="2" stroke-linecap="round"/>
+                <path d="M8.5 16.5a4 4 0 0 1 5.5-5.5" stroke="#999" stroke-width="2" stroke-linecap="round"/>
+                <path d="M5 12.5a10.94 10.94 0 0 1 5.5-4.5" stroke="#999" stroke-width="2" stroke-linecap="round"/>
+                <path d="M10.5 5c3.5 0 6.5 2 8.5 5" stroke="#999" stroke-width="2" stroke-linecap="round"/>
+                <path d="M19 12.5a10.94 10.94 0 0 0-2-2" stroke="#999" stroke-width="2" stroke-linecap="round"/>
+            </svg>
+        </div>
+        <h2 class="offline-title">인터넷 연결 오류</h2>
+        <p class="offline-message">
+            네트워크 연결 상태를 확인하고<br>
+            다시 시도해주세요
+        </p>
+        <div class="offline-actions">
+            <button class="btn-primary" onclick="handleRetry()">
+                <span class="btn-text">다시 시도</span>
+            </button>
+            <button class="btn-secondary" onclick="handleClose()">
+                닫기
+            </button>
+        </div>
+        <div class="offline-details">
+            <span class="error-code">ERR_INTERNET_DISCONNECTED</span>
+        </div>
+    </div>
+    <script src="js/offline.js"></script>
+</body>
+</html>
