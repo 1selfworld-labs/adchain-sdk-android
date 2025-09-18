@@ -165,11 +165,7 @@
     window.addEventListener('online', function() {
         console.log('Network connection restored');
         showNotification('네트워크 연결됨');
-
-        // Auto reload after 1 second
-        setTimeout(() => {
-            location.reload();
-        }, 1000);
+        // Auto reload disabled - user must manually retry
     });
 
     window.addEventListener('offline', function() {
@@ -189,10 +185,8 @@
 
         // Check if already online (rare case)
         if (navigator.onLine) {
-            console.log('Already online, reloading in 2 seconds...');
-            setTimeout(() => {
-                location.reload();
-            }, 2000);
+            console.log('Already online, but not auto-reloading');
+            // Auto reload disabled - show offline page for user action
         }
     });
 })();

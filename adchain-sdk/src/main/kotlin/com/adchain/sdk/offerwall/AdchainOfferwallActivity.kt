@@ -11,6 +11,7 @@ import android.os.Bundle
 import com.adchain.sdk.utils.AdchainLogger
 import android.view.ViewGroup
 import android.webkit.*
+import android.webkit.WebViewClient.*
 import android.widget.FrameLayout
 import android.widget.Toast
 import androidx.activity.OnBackPressedCallback
@@ -414,9 +415,29 @@ internal class AdchainOfferwallActivity : AppCompatActivity() {
                 } else {
                     "WebView error occurred"
                 }
-                AdchainLogger.e(TAG, "WebView error: $errorDescription")
-                runOnUiThread {
-                    callback?.onError("Failed to load offerwall: $errorDescription")
+                val errorCode = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.M) {
+                    error?.errorCode ?: 0
+                } else {
+                    0
+                }
+                AdchainLogger.e(TAG, "WebView error: $errorDescription (code: $errorCode)")
+
+                // Check if it's a network error and show offline page
+                // ERROR_INTERNET_DISCONNECTED is only available on API 33+, use value directly
+                if (errorCode == ERROR_HOST_LOOKUP ||
+                    errorCode == ERROR_CONNECT ||
+                    errorCode == ERROR_TIMEOUT ||
+                    errorCode == -2 || // ERROR_INTERNET_DISCONNECTED value
+                    errorDescription.contains("ERR_INTERNET_DISCONNECTED", ignoreCase = true) ||
+                    errorDescription.contains("ERR_NAME_NOT_RESOLVED", ignoreCase = true) ||
+                    errorDescription.contains("ERR_CONNECTION", ignoreCase = true)) {
+
+                    AdchainLogger.d(TAG, "Network error detected, showing offline page")
+                    showOfflinePage()
+                } else {
+                    runOnUiThread {
+                        callback?.onError("Failed to load offerwall: $errorDescription")
+                    }
                 }
             }
         }
@@ -730,6 +751,22 @@ internal class AdchainOfferwallActivity : AppCompatActivity() {
 
                 // DO NOT call onClosed() here
                 // Mission progress should only trigger UI update, not close the WebView
+            }
+        }
+    }
+
+    /**
+     * Show offline page when network error occurs
+     */
+    private fun showOfflinePage() {
+        runOnUiThread {
+            try {
+                // Load offline HTML from assets
+                webView.loadUrl("file:///android_asset/adchain/offline_error.html")
+            } catch (e: Exception) {
+                AdchainLogger.e(TAG, "Failed to load offline page", e)
+                // Fallback: close the activity
+                finish()
             }
         }
     }

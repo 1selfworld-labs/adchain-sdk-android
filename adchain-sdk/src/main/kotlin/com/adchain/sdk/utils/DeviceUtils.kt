@@ -23,14 +23,12 @@ object DeviceUtils {
     private const val TAG = "AdchainDeviceUtils"
     private const val PREFS_NAME = "adchain_sdk_prefs"
     private const val KEY_DEVICE_ID = "device_id"
-    private const val KEY_ADVERTISING_ID = "advertising_id"
-    private const val KEY_ADVERTISING_ID_TIMESTAMP = "advertising_id_timestamp"
-    private const val ADVERTISING_ID_CACHE_DURATION = 3600000L // 1 hour in milliseconds
+    // KEY_ADVERTISING_ID와 timestamp 제거 - 더 이상 영구 저장 안함
     private const val ZERO_ID = "00000000-0000-0000-0000-000000000000"
-    
+
     private var cachedDeviceId: String? = null
-    private var cachedAdvertisingId: String? = null
-    private var advertisingIdTimestamp: Long = 0
+    private var cachedAdvertisingId: String? = null  // 앱 생명주기 동안만 유지
+    private var isAdvertisingIdInitialized = false  // 초기화 여부 추적
     
     /**
      * Get a persistent device ID using Android ID
@@ -93,118 +91,82 @@ object DeviceUtils {
     }
     
     /**
+     * Initialize advertising ID on app launch
+     * Should be called once when SDK initializes
+     */
+    suspend fun initializeAdvertisingId(context: Context) = withContext(Dispatchers.IO) {
+        AdchainLogger.i(TAG, "[GAID-INIT] Initializing advertising ID on app launch...")
+
+        try {
+            // Check Google Play Services availability
+            val availability = GoogleApiAvailability.getInstance()
+            val playServicesStatus = availability.isGooglePlayServicesAvailable(context)
+
+            if (playServicesStatus != ConnectionResult.SUCCESS) {
+                AdchainLogger.e(TAG, "[GAID-INIT] Google Play Services not available")
+                cachedAdvertisingId = ZERO_ID
+                isAdvertisingIdInitialized = true
+                return@withContext
+            }
+
+            // Check AD_ID permission for Android 13+
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                val hasPermission = context.checkSelfPermission("com.google.android.gms.permission.AD_ID") ==
+                    PackageManager.PERMISSION_GRANTED
+                if (!hasPermission) {
+                    AdchainLogger.e(TAG, "[GAID-INIT] AD_ID permission not granted")
+                    cachedAdvertisingId = ZERO_ID
+                    isAdvertisingIdInitialized = true
+                    return@withContext
+                }
+            }
+
+            // Get advertising ID
+            val adIdInfo = withTimeout(2000L) {
+                AdvertisingIdClient.getAdvertisingIdInfo(context.applicationContext)
+            }
+
+            // Check if user has opted out
+            if (adIdInfo.isLimitAdTrackingEnabled) {
+                AdchainLogger.w(TAG, "[GAID-INIT] User opted out of ad tracking")
+                cachedAdvertisingId = ZERO_ID
+            } else {
+                val advertisingId = adIdInfo.id
+                if (!advertisingId.isNullOrEmpty() && advertisingId != ZERO_ID) {
+                    cachedAdvertisingId = advertisingId
+                    AdchainLogger.i(TAG, "[GAID-INIT] SUCCESS - Advertising ID: ${advertisingId.take(8)}...")
+                } else {
+                    cachedAdvertisingId = ZERO_ID
+                    AdchainLogger.w(TAG, "[GAID-INIT] Invalid advertising ID received")
+                }
+            }
+
+        } catch (e: TimeoutCancellationException) {
+            AdchainLogger.e(TAG, "[GAID-INIT] Timeout getting advertising ID", e)
+            cachedAdvertisingId = ZERO_ID
+        } catch (e: Exception) {
+            AdchainLogger.e(TAG, "[GAID-INIT] Error getting advertising ID", e)
+            cachedAdvertisingId = ZERO_ID
+        }
+
+        isAdvertisingIdInitialized = true
+    }
+
+    /**
      * Get Google Advertising ID (GAID)
      * This method should be called from a coroutine
      * Returns ZERO_ID if advertising ID is not available or user has opted out
      */
     suspend fun getAdvertisingId(context: Context): String? = withContext(Dispatchers.IO) {
-        AdchainLogger.v(TAG, "[GAID] Starting getAdvertisingId()")
-        try {
-            val currentTime = System.currentTimeMillis()
-
-            // 1. Check cache first (skip if cached value is ZERO_ID)
-            if (cachedAdvertisingId != null &&
-                cachedAdvertisingId != ZERO_ID &&
-                (currentTime - advertisingIdTimestamp) < ADVERTISING_ID_CACHE_DURATION) {
-                AdchainLogger.v(TAG, "[GAID] Returning cached value: ${cachedAdvertisingId?.take(8)}...")
-                return@withContext cachedAdvertisingId
-            }
-            AdchainLogger.v(TAG, "[GAID] No valid cached value, proceeding to fetch")
-
-            // 2. Try to get from SharedPreferences
-            val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-            val storedAdId = prefs.getString(KEY_ADVERTISING_ID, null)
-            val storedTimestamp = prefs.getLong(KEY_ADVERTISING_ID_TIMESTAMP, 0)
-            AdchainLogger.v(TAG, "[GAID] SharedPrefs check - storedAdId: ${storedAdId?.take(8) ?: "null"}, age: ${currentTime - storedTimestamp}ms")
-
-            if (storedAdId != null &&
-                storedAdId != ZERO_ID &&
-                (currentTime - storedTimestamp) < ADVERTISING_ID_CACHE_DURATION) {
-                cachedAdvertisingId = storedAdId
-                advertisingIdTimestamp = storedTimestamp
-                AdchainLogger.v(TAG, "[GAID] Returning SharedPrefs value: ${storedAdId.take(8)}...")
-                return@withContext storedAdId
-            }
-
-            // 3. Check Google Play Services availability
-            AdchainLogger.v(TAG, "[GAID] Checking Google Play Services availability...")
-            val availability = GoogleApiAvailability.getInstance()
-            val playServicesStatus = availability.isGooglePlayServicesAvailable(context)
-            AdchainLogger.v(TAG, "[GAID] Google Play Services status: $playServicesStatus (SUCCESS=${ConnectionResult.SUCCESS})")
-
-            if (playServicesStatus != ConnectionResult.SUCCESS) {
-                val errorString = availability.getErrorString(playServicesStatus)
-                AdchainLogger.e(TAG, "[GAID] Google Play Services not available: $errorString (code=$playServicesStatus)")
-                return@withContext ZERO_ID
-            }
-            AdchainLogger.v(TAG, "[GAID] Google Play Services is available")
-
-            // 4. Check AD_ID permission for Android 13+
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                AdchainLogger.v(TAG, "[GAID] Android 13+ detected, checking AD_ID permission...")
-                val hasPermission = context.checkSelfPermission("com.google.android.gms.permission.AD_ID") ==
-                    PackageManager.PERMISSION_GRANTED
-                AdchainLogger.v(TAG, "[GAID] AD_ID permission status: ${if (hasPermission) "GRANTED" else "DENIED"}")
-                if (!hasPermission) {
-                    AdchainLogger.e(TAG, "[GAID] AD_ID permission not granted - returning ZERO_ID")
-                    return@withContext ZERO_ID
-                }
-            } else {
-                AdchainLogger.v(TAG, "[GAID] Android ${Build.VERSION.SDK_INT} - AD_ID permission check not required")
-            }
-
-            // 5. Get advertising ID directly with timeout
-            AdchainLogger.v(TAG, "[GAID] Calling AdvertisingIdClient.getAdvertisingIdInfo() with 2s timeout...")
-            val startTime = System.currentTimeMillis()
-            val adIdInfo = withTimeout(2000L) {
-                AdvertisingIdClient.getAdvertisingIdInfo(context.applicationContext)
-            }
-            val elapsed = System.currentTimeMillis() - startTime
-            AdchainLogger.v(TAG, "[GAID] AdvertisingIdClient returned in ${elapsed}ms")
-
-            // 6. Check if user has opted out of ad tracking
-            AdchainLogger.v(TAG, "[GAID] Checking isLimitAdTrackingEnabled...")
-            if (adIdInfo.isLimitAdTrackingEnabled) {
-                AdchainLogger.w(TAG, "[GAID] User opted out of ad tracking (LAT=true) - returning ZERO_ID")
-                return@withContext ZERO_ID  // This is expected behavior
-            }
-            AdchainLogger.v(TAG, "[GAID] User has NOT opted out (LAT=false)")
-
-            val advertisingId = adIdInfo.id
-            AdchainLogger.v(TAG, "[GAID] Raw advertising ID from API: ${if (advertisingId.isNullOrEmpty()) "NULL/EMPTY" else "'$advertisingId'"}")
-
-            // 7. Cache valid advertising ID only
-            if (!advertisingId.isNullOrEmpty() && advertisingId != ZERO_ID) {
-                cachedAdvertisingId = advertisingId
-                advertisingIdTimestamp = currentTime
-
-                // Store in SharedPreferences
-                prefs.edit()
-                    .putString(KEY_ADVERTISING_ID, advertisingId)
-                    .putLong(KEY_ADVERTISING_ID_TIMESTAMP, currentTime)
-                    .apply()
-
-                AdchainLogger.i(TAG, "[GAID] SUCCESS - Retrieved valid advertising ID: ${advertisingId.take(8)}...")
-                return@withContext advertisingId
-            }
-
-            // Invalid or empty ID received
-            AdchainLogger.e(TAG, "[GAID] Invalid advertising ID received: isNull=${advertisingId == null}, isEmpty=${advertisingId?.isEmpty()}, isZero=${advertisingId == ZERO_ID}")
-            ZERO_ID
-
-        } catch (e: TimeoutCancellationException) {
-            AdchainLogger.e(TAG, "[GAID] TIMEOUT - Failed to retrieve GAID within 2 seconds", e)
-            ZERO_ID
-        } catch (e: SecurityException) {
-            AdchainLogger.e(TAG, "[GAID] SECURITY ERROR - Missing permission or security restriction", e)
-            ZERO_ID
-        } catch (e: NoClassDefFoundError) {
-            AdchainLogger.e(TAG, "[GAID] CLASS NOT FOUND - Google Play Services classes missing", e)
-            ZERO_ID
-        } catch (e: Exception) {
-            AdchainLogger.e(TAG, "[GAID] UNEXPECTED ERROR - ${e.javaClass.simpleName}: ${e.message}", e)
-            ZERO_ID
+        // 초기화되지 않았으면 먼저 초기화
+        if (!isAdvertisingIdInitialized) {
+            initializeAdvertisingId(context)
         }
+
+        // 메모리 캐시에서 바로 반환 (앱 생명주기 동안 유효)
+        AdchainLogger.v(TAG, "[GAID] Returning cached value: ${cachedAdvertisingId?.take(8) ?: "null"}")
+        return@withContext cachedAdvertisingId ?: ZERO_ID
+
     }
     
     
@@ -276,34 +238,15 @@ object DeviceUtils {
             return ZERO_ID
         }
 
-        val currentTime = System.currentTimeMillis()
-
-        // Return cached value if available (skip ZERO_ID)
-        if (cachedAdvertisingId != null &&
-            cachedAdvertisingId != ZERO_ID &&
-            (currentTime - advertisingIdTimestamp) < ADVERTISING_ID_CACHE_DURATION) {
-            AdchainLogger.v(TAG, "[GAID-SYNC] Returning cached value: ${cachedAdvertisingId?.take(8)}...")
-            return cachedAdvertisingId
-        }
-        AdchainLogger.v(TAG, "[GAID-SYNC] No valid cache, checking SharedPrefs...")
-
-        // Try to get from SharedPreferences
-        val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-        val storedAdId = prefs.getString(KEY_ADVERTISING_ID, null)
-        val storedTimestamp = prefs.getLong(KEY_ADVERTISING_ID_TIMESTAMP, 0)
-
-        if (storedAdId != null &&
-            storedAdId != ZERO_ID &&
-            (currentTime - storedTimestamp) < ADVERTISING_ID_CACHE_DURATION) {
-            cachedAdvertisingId = storedAdId
-            advertisingIdTimestamp = storedTimestamp
-            AdchainLogger.v(TAG, "[GAID-SYNC] Returning SharedPrefs value: ${storedAdId.take(8)}...")
-            return storedAdId
+        // 초기화되지 않았으면 ZERO_ID 반환
+        if (!isAdvertisingIdInitialized) {
+            AdchainLogger.w(TAG, "[GAID-SYNC] Not initialized yet, returning ZERO_ID")
+            return ZERO_ID
         }
 
-        // If no cached value available, return zero ID
-        AdchainLogger.w(TAG, "[GAID-SYNC] No cached value available, returning ZERO_ID")
-        return ZERO_ID
+        // 메모리 캐시에서 바로 반환
+        AdchainLogger.v(TAG, "[GAID-SYNC] Returning cached value: ${cachedAdvertisingId?.take(8) ?: "null"}")
+        return cachedAdvertisingId ?: ZERO_ID
     }
     
     /**
@@ -386,6 +329,6 @@ object DeviceUtils {
     fun clearCache() {
         cachedDeviceId = null
         cachedAdvertisingId = null
-        advertisingIdTimestamp = 0
+        isAdvertisingIdInitialized = false
     }
 }

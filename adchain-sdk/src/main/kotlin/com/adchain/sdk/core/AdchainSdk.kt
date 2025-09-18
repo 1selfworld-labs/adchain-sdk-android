@@ -71,14 +71,15 @@ object AdchainSdk {
         // Initialize network manager
         NetworkManager.initialize()
 
-        // Pre-fetch advertising ID in background to populate cache early
+        // Initialize advertising ID on app launch
         coroutineScope.launch(Dispatchers.IO) {
             try {
-                AdchainLogger.d(TAG, "Starting GAID pre-fetch during SDK initialization")
-                val gaid = DeviceUtils.getAdvertisingId(application)
-                AdchainLogger.d(TAG, "GAID pre-fetch completed during init: ${gaid?.take(8) ?: "null or empty"}")
+                AdchainLogger.d(TAG, "Initializing advertising ID on app launch")
+                DeviceUtils.initializeAdvertisingId(application)
+                val gaid = DeviceUtils.getAdvertisingIdSync(application)
+                AdchainLogger.i(TAG, "Advertising ID initialized: ${gaid?.take(8) ?: "null"}")
             } catch (e: Exception) {
-                AdchainLogger.w(TAG, "GAID pre-fetch failed during init, will retry on login: ${e.message}")
+                AdchainLogger.e(TAG, "Failed to initialize advertising ID: ${e.message}", e)
             }
         }
 
