@@ -57,7 +57,7 @@ dependencyResolutionManagement {
 
 ```kotlin
 dependencies {
-    implementation("com.github.1selfworld-labs:adchain-sdk-android:v1.0.13")
+    implementation("com.github.1selfworld-labs:adchain-sdk-android:v1.0.14")
 }
 ```
 
